@@ -123,7 +123,7 @@ def processDisparity(buff, count):
     avDisp[:,-int(dxMax):-1] = 0
     vis_color = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET) 
     vis_mean = cctv.imfuse(imgRef, vis_color, 0.2)
-    vis_mean[:,-int(dxMax):-1] = 0
+#    vis_mean[:,-int(dxMax):-1] = 0
     frametxt = "Ref frame: %s; Belt dx: %s." % (count,round(dxMax))    
     draw_str(vis_mean, (20, 20), frametxt)
     
@@ -185,7 +185,7 @@ def process(cam, params, *args):
                     break
             else:
                 cv2.waitKey(1)
-        if count>stop:
+        if count>=stop:
              cv2.destroyAllWindows()
              out.release()
              break
@@ -208,7 +208,7 @@ def parse_args():
     parser.add_argument('--cal_file', type=str, default="beltE/cameraParams.yml",
                         help='calibration filename.')
     parser.add_argument('--start', type=int, default=55, help='Start at frame=start_idx')
-    parser.add_argument('--stop', type=int, default=70, help='Stop at frame=stop_idx')
+    parser.add_argument('--stop', type=int, default=200, help='Stop at frame=stop_idx')
     args = parser.parse_args()
     
     return args
