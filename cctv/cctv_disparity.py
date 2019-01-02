@@ -3,6 +3,9 @@
 Spyder Editor
 
 cctvDisparity( ) - compute disparity
+02.01.19 - stereoPreprocess() returns dx (so we can add it to dispL);
+            and disabled template matching. dx changed to floor(dx)
+01.01.19 - Set sgbm params P1 and P2.
 19.12.18 - Tidy up and rename. Much of the main code now done as preprocessing.
 19.12.18 - Copied to devStereoDisparity.py
 04.12.18 - Add preprocessImg funtion; update and tune sgbm parameters
@@ -21,18 +24,13 @@ import cctv_utils as cctv
 import os
 from cctv_noisy import noisy
 
-def stereoPreprocess(imgL, imgR, template, dx, mix=0.25):
+def stereoPreprocess(imgL, imgR, dx, mix=0.25, template=None):
     """
     stereoPreprocess - Implements all preprocessing steps for beltE
     """ 
+    # make dx a conservative estimate so we should always find a match
     dx = np.floor(dx-dx/10.0)
-    
-    # match the template
-    imgRgrey = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
-    mask = cctv.matchTemplate(imgRgrey,template,threshold=0.05)
-    # generate noise
-    noiseImg = noisy("gauss", np.zeros_like(imgRgrey), 0.1) * 100
-    
+      
     # translate
     imgL = cctv.translateImg(imgL, (-dx, 0))
     
@@ -44,12 +42,18 @@ def stereoPreprocess(imgL, imgR, template, dx, mix=0.25):
     imgR = cctv.imfuse(imgR, edgeR, mix)
     
     # add noise to belt
-    loc = np.where( mask==255)
-    for pt in zip(*loc[::]):
-        imgL[pt[0],pt[1],:] = noiseImg[pt[0],pt[1]]
-        imgR[pt[0],pt[1],:] = noiseImg[pt[0],pt[1]]
+    if template is not None:
+        # match the template
+        imgRgrey = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
+        mask = cctv.matchTemplate(imgRgrey,template,threshold=0.05)
+        # generate noise
+        noiseImg = noisy("gauss", np.zeros_like(imgRgrey), 0.1) * 100
+        loc = np.where( mask==255)
+        for pt in zip(*loc[::]):
+            imgL[pt[0],pt[1],:] = noiseImg[pt[0],pt[1]]
+            imgR[pt[0],pt[1],:] = noiseImg[pt[0],pt[1]]
        
-    return imgL, imgR
+    return imgL, imgR, dx
     
     
 def inpaintUnmatchedBlocks(src):
@@ -80,8 +84,8 @@ def sgbmDisparity(imgL, imgR, dx=0, fFlag=False):
     
     minDisp, numDisp = getDispRange(dx)
  
-    print('sgbm disparity, dx= ', dx)
-    print('minDisp: %s, numDisp: %s, windowSize: %s' % (minDisp,numDisp, windowSize))
+#    print('sgbm disparity, dx= ', dx)
+#    print('minDisp: %s, numDisp: %s, windowSize: %s' % (minDisp,numDisp, windowSize))
     
     if (numDisp<=0 or numDisp%16!=0):
         raise NameError('Incorrect max_disparity value: it should be positive and divisible by 16')
@@ -92,14 +96,14 @@ def sgbmDisparity(imgL, imgR, dx=0, fFlag=False):
     stereoL = cv2.StereoSGBM_create(minDisparity = minDisp,
         numDisparities = numDisp,
         blockSize = windowSize,
-#        P1 = 8*3*windowSize**2,
-#        P2 = 32*3*windowSize**2,
+        P1 = 8*1*windowSize**2,
+        P2 = 32*1*windowSize**2,
         disp12MaxDiff = 1,
 #        preFilterCap = 63,
         uniquenessRatio = 10,
 #        speckleWindowSize = 25,
 #        speckleRange = 5,
-#        mode = cv2.STEREO_SGBM_MODE_HH
+        mode = cv2.STEREO_SGBM_MODE_HH
     )    
     stereoR = cv2.ximgproc.createRightMatcher(stereoL)
     
@@ -182,6 +186,8 @@ def cctvDisparity(imgL, imgR, dx=0, alg='sgbm', fFlag=False, iFlag=False):
     if iFlag:
         dispL = inpaintUnmatchedBlocks(np.float32(dispL))
         
+    
+        
     return dispL, dispR, wlsL, wlsConf
 
 
@@ -191,11 +197,11 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--root_path', type=str, default="../data/",
                         help='Root pathname.')
-    parser.add_argument('--nameL', type=str, default="beltE58.tif",
+    parser.add_argument('--nameL', type=str, default="beltE57.tif",
                         help='Left image filename.')
-    parser.add_argument('--nameR', type=str, default="beltE57.tif",
+    parser.add_argument('--nameR', type=str, default="beltE55.tif",
                         help='Right image filename.')
-    parser.add_argument('--dx', type=int, default=24.68,
+    parser.add_argument('--dx', type=int, default=35.0,
                         help='Stereo baseline')
     args = parser.parse_args()
     
@@ -245,12 +251,12 @@ if __name__ == '__main__':
     # read images
     rawL = cv2.imread(args.root_path+args.nameL)
     rawR = cv2.imread(args.root_path+args.nameR)
-    template = cv2.imread(args.root_path+'template.tif',0)
+#    template = cv2.imread(args.root_path+'template.tif',0)
     # conservative estimate of stereo baseline
     dx = args.dx
     
     
-    imgL, imgR = stereoPreprocess(rawL, rawR, template, dx, mix=0.25)
+    imgL, imgR = stereoPreprocess(rawL, rawR, dx, mix=0.25, template=None)
         
     cv2.imshow('rawL', rawL)
     cv2.imshow('rawR', rawR)

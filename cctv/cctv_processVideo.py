@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 Spyder Editor
+03.01.19 - removed template from preprocessing step. Changed way disparity is rendered. 
+02.01.19 - changes to computeDisparity to give 'normalised' disparity,
+            and messed with the colormaps
 22.12.18 - changes to processDisparity to calculate many disparity estimates.
 20.12.18 - copied to cctv_processVideo
 Script to test cctv video input, FrameBuffer, Disparity
@@ -54,7 +57,7 @@ class FrameBuffer:
                 if len(dx) == 0:
                     x += 0
                 else:
-                    x += median(dx)              
+                    x += median(dx)
             if len(self.data) < self.size:
                 pass
             else:
@@ -76,12 +79,15 @@ def computeDisparity(imgL, imgR, dx):
     """
     computeDisparity - run cctv stereo processing pipeline
     """
-    global template
+#    global template
 
-    imgL, imgR = cctvDisp.stereoPreprocess(imgL, imgR, template, dx)
+    imgL, imgR, dx_ = cctvDisp.stereoPreprocess(imgL, imgR, dx)
     dispL, dispR, wlsL, wlsConf = cctvDisp.cctvDisparity(imgL, imgR, dx, alg='sgbm', iFlag=True) 
-    
-    return np.uint8(np.clip(dispL, 0, 255))
+
+    # normalise disparity
+    out = ( dispL/16.0 + dx_ ) / dx 
+     
+    return out
 
     
 def processDisparity(buff, count):
@@ -102,8 +108,9 @@ def processDisparity(buff, count):
             # stereo baseline
             dx = buff.x[j] - buff.x[i]
             # reference translation
-            tdx = np.int(np.round(buff.x[i] - buff.x[-1])) 
-            print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
+            tdx = np.int(np.round(buff.x[i] - buff.x[-1]))
+            if debug:
+                print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
             disp = computeDisparity(imgL, imgR, dx)
             disp = cctv.translateImg(disp, (-tdx, 0))
             z_buff[:,:,n] = disp
@@ -111,35 +118,45 @@ def processDisparity(buff, count):
     
     # compute sum and average disparity
     sumDisp = np.sum(z_buff,axis=2)
-    avDisp = np.uint8( sumDisp.copy() / z_buff.shape[2] )
+    avDisp = sumDisp.copy() / z_buff.shape[2] 
+    avDisp = np.uint8(cctv.rescale(avDisp, (0,255), (0.95, 1.25)))
     avDisp[:,-int(dxMax):-1] = 0
     vis_color = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET) 
-    vis_mean = cctv.imfuse(imgRef, vis_color, 0.5)
+    vis_mean = cctv.imfuse(imgRef, vis_color, 0.2)
+    vis_mean[:,-int(dxMax):-1] = 0
     frametxt = "Ref frame: %s; Belt dx: %s." % (count,round(dxMax))    
     draw_str(vis_mean, (20, 20), frametxt)
     
-    sumDisp = np.uint8(cctv.rescale(sumDisp, (0,255)))
-    sumDisp[:,-int(dxMax):-1] = 0
-    vis_color = cv2.applyColorMap(sumDisp, cv2.COLORMAP_JET)
-    vis_sum = cctv.imfuse(imgRef, vis_color, 0.5)
-    draw_str(vis_sum, (20, 20), frametxt)
+#    sumDisp = np.uint8(cctv.rescale(sumDisp, (0,255)))
+#    sumDisp[:,-int(dxMax):-1] = 0
+#    vis_color = cv2.applyColorMap(sumDisp, cv2.COLORMAP_JET)
+#    vis_sum = cctv.imfuse(imgRef, vis_color, 0.2)
+#    draw_str(vis_sum, (20, 20), frametxt)
     
     if debug:
         # write results to file
-        filename = temp_path+"Sum"+str(count)+".jpg"
-        cv2.imwrite(filename, vis_sum)
+#        filename = temp_path+"Sum"+str(count)+".jpg"
+#        cv2.imwrite(filename, vis_sum)
         filename = temp_path+"Mean"+str(count)+".jpg"
         cv2.imwrite(filename, vis_mean)
+        
+        # display results on screen
+#        cv2.imshow('Sum'+str(count), cv2.applyColorMap(sumDisp, cv2.COLORMAP_JET))
+        cv2.imshow('Mean'+str(count), cv2.applyColorMap(avDisp, cv2.COLORMAP_JET))
+        
+        cv2.waitKey(0)
+#        cv2.destroyWindow('Sum'+str(count))
+        cv2.destroyWindow('Mean'+str(count))
          
-    return vis_sum, vis_mean
+    return vis_mean
     
         
 def process(cam, params, *args):
     global debug
-    start = args[0]
-    stop = args[1]
+    buffSize = args[0]
+    start = args[1]
+    stop = args[2]
     count = 0
-    buffSize = 5
     buff = FrameBuffer(buffSize)
     
     for i in range(buffSize):
@@ -153,12 +170,12 @@ def process(cam, params, *args):
         
         vis = f.copy()
         draw_str(vis, (20, 20), 'Frame: %d D: %f' %(count,x))
-        cv2.imshow('video', vis)
-        
+    
         if count>=start:
             cv2.imwrite('../data/beltE' + str(count) + '.tif', f)
-            out_frame, __ = processDisparity(buff, count)
+            out_frame = processDisparity(buff, count)
             out.write(out_frame)
+            cv2.imshow('video', vis)
             cv2.imshow('Disparity', out_frame)
             if debug:
                 ch = cv2.waitKey(0)
@@ -200,6 +217,7 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
+    buffSize = 5
     
     # debug switch
     global debug
@@ -216,8 +234,10 @@ if __name__ == '__main__':
     
     # global variables
     cameraParams = cctv.getCameraParams(args.root_path+args.cal_file)
-    global template
-    template = cv2.imread(args.root_path+args.template_file,0)
+    # template not needed (03.01.19)
+#    global template
+#    template = cv2.imread(args.root_path+args.template_file,0)
+#    template = None
     # for debug
     #global z, vis
 
@@ -228,7 +248,7 @@ if __name__ == '__main__':
     
     print('Spooling to frame %s ...' % args.start)
     cam = cv2.VideoCapture(args.root_path+args.video_file)
-    process(cam, cameraParams, args.start, args.stop)
+    process(cam, cameraParams, buffSize, args.start, args.stop)
     
     
     

@@ -70,7 +70,7 @@ def cap(img, bounds):
     img[img>upper] = upper
 
 
-def rescale(src,bounds, *args):
+def rescale(src, bounds, *args):
     """
     rescale - rescale data in (a,b)
     y = rescale(x,bounds, minMax)
