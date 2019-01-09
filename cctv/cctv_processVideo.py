@@ -221,7 +221,7 @@ if __name__ == '__main__':
     
     # debug switch
     global debug
-    debug = False
+    debug = True
     
     # creates a temporary directory to save data generated at runtime
     global temp_path

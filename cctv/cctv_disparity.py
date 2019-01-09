@@ -29,14 +29,17 @@ def stereoPreprocess(imgL, imgR, dx, mix=0.25, template=None):
     stereoPreprocess - Implements all preprocessing steps for beltE
     """ 
     # make dx a conservative estimate so we should always find a match
-    dx = np.floor(dx-dx/10.0)
+    dx = np.floor(dx-dx/50.0)
       
     # translate
     imgL = cctv.translateImg(imgL, (-dx, 0))
     
     # prefilter
-    edgeL = np.uint8(cctv.rescale(cv2.Sobel(imgL,cv2.CV_64F,1,0,ksize=3), (0,255)))
-    edgeR = np.uint8(cctv.rescale(cv2.Sobel(imgR,cv2.CV_64F,1,0,ksize=3), (0,255)))
+#    edgeL = np.uint8(cctv.rescale(cv2.Sobel(imgL,cv2.CV_64F,1,0,ksize=3), (0,255)))
+#    edgeR = np.uint8(cctv.rescale(cv2.Sobel(imgR,cv2.CV_64F,1,0,ksize=3), (0,255)))
+    edgeL = np.uint8(np.clip(cv2.Sobel(imgL,cv2.CV_64F,1,0,ksize=3), 0,63))
+    edgeR = np.uint8(np.clip(cv2.Sobel(imgR,cv2.CV_64F,1,0,ksize=3), 0,63))
+
     # mix edges and raw
     imgL = cctv.imfuse(imgL, edgeL, mix)
     imgR = cctv.imfuse(imgR, edgeR, mix)
@@ -70,7 +73,7 @@ def getDispRange(dx):
     delta = int(np.floor(dx))
     minDisp = delta - delta % 16
     maxDisp = delta - minDisp
-    numDisp = maxDisp + (16 - maxDisp % 16 ) #+ 16
+    numDisp = maxDisp + (16 - maxDisp % 16 ) # + 16
     
     return minDisp, numDisp
 
@@ -83,9 +86,10 @@ def sgbmDisparity(imgL, imgR, dx=0, fFlag=False):
     windowSize = 15
     
     minDisp, numDisp = getDispRange(dx)
+
  
-#    print('sgbm disparity, dx= ', dx)
-#    print('minDisp: %s, numDisp: %s, windowSize: %s' % (minDisp,numDisp, windowSize))
+    print('sgbm disparity, dx= ', dx)
+    print('minDisp: %s, numDisp: %s, windowSize: %s' % (minDisp,numDisp, windowSize))
     
     if (numDisp<=0 or numDisp%16!=0):
         raise NameError('Incorrect max_disparity value: it should be positive and divisible by 16')
@@ -100,7 +104,7 @@ def sgbmDisparity(imgL, imgR, dx=0, fFlag=False):
         P2 = 32*1*windowSize**2,
         disp12MaxDiff = 1,
 #        preFilterCap = 63,
-        uniquenessRatio = 10,
+        uniquenessRatio = 5,
 #        speckleWindowSize = 25,
 #        speckleRange = 5,
         mode = cv2.STEREO_SGBM_MODE_HH
@@ -197,11 +201,11 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--root_path', type=str, default="../data/",
                         help='Root pathname.')
-    parser.add_argument('--nameL', type=str, default="beltE57.tif",
+    parser.add_argument('--nameL', type=str, default="beltE61.tif",
                         help='Left image filename.')
     parser.add_argument('--nameR', type=str, default="beltE55.tif",
                         help='Right image filename.')
-    parser.add_argument('--dx', type=int, default=35.0,
+    parser.add_argument('--dx', type=int, default=132,
                         help='Stereo baseline')
     args = parser.parse_args()
     
@@ -216,6 +220,7 @@ if __name__ == '__main__':
     
     # beltE dx values wrt x(55) = 0
     # dx(56)=8.58, dx(57)=35.0 , dx(58)=59.68, dx(59)=83.33
+    # dx(60)=108, dx(61)=132, dx(62)=155, dx(63)=180, dx(64)=205
     
     # beltE dx values wrt x(56) = 0
     # dx(57)=26.42, dx(58)=51.1 , dx(59)=74.75
@@ -252,11 +257,10 @@ if __name__ == '__main__':
     rawL = cv2.imread(args.root_path+args.nameL)
     rawR = cv2.imread(args.root_path+args.nameR)
 #    template = cv2.imread(args.root_path+'template.tif',0)
-    # conservative estimate of stereo baseline
+    
     dx = args.dx
-    
-    
-    imgL, imgR = stereoPreprocess(rawL, rawR, dx, mix=0.25, template=None)
+        
+    imgL, imgR, __ = stereoPreprocess(rawL, rawR, dx, mix=0.25, template=None)
         
     cv2.imshow('rawL', rawL)
     cv2.imshow('rawR', rawR)
@@ -264,10 +268,11 @@ if __name__ == '__main__':
     cv2.imshow('imgR', imgR)
     
     #  compute disparity          
-    dispL, dispR, wlsL, wlsConf = cctvDisparity(imgL, imgR, dx=0, alg='sgbm', iFlag=True)
+    dispL, dispR, wlsL, wlsConf = cctvDisparity(imgL, imgR, dx=0, alg='sgbm', iFlag=False)
  
     # display dispaity
-    vis = np.uint8(np.clip(dispL, 0, 255))
+    vis = np.clip(dispL, 0,255)
+    vis = np.uint8(cctv.rescale(vis, (0,255)))
     vis_color = cv2.applyColorMap(vis, cv2.COLORMAP_JET)
     cv2.imshow('dispL', vis_color)
        
