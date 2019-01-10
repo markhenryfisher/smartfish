@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+10.01.19 - simplified how dispSum is computed. Changed how disparity is normalised.
+            increased buffer size to 7 (gives ~ 150mm belt motion).
+            Added function to check belt motion for consistency.
 03.01.19 - removed template from preprocessing step. Changed way disparity is rendered. 
 02.01.19 - changes to computeDisparity to give 'normalised' disparity,
             and messed with the colormaps
@@ -55,6 +57,7 @@ class FrameBuffer:
                 f1Gray = cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
                 dx = cctv.getBeltMotionByOpticalFlow(f0Gray, f1Gray)
                 if len(dx) == 0:
+                    print('Warning: Tracker failed!!!')
                     x += 0
                 else:
                     x += median(dx)
@@ -85,9 +88,30 @@ def computeDisparity(imgL, imgR, dx):
     dispL, dispR, wlsL, wlsConf = cctvDisp.cctvDisparity(imgL, imgR, dx, alg='sgbm', iFlag=True) 
 
     # normalise disparity
-    out = ( dispL/16.0 + dx_ ) / dx 
+    #out = ( dispL/16.0 + dx_ ) / dx 
+    weight_factor = 1 / (dx_ + 1)
+    out = dispL / 16.0 * weight_factor
      
     return out
+
+def ok_belt_travel(dx):
+    """
+    Checks that the belt is consistently moving forwards (or backwards)
+    """
+    global _belt_travel_to_right
+    
+    thresh = 2
+
+    if abs(dx)<thresh:
+        result =  True
+    else:
+        if _belt_travel_to_right is None:
+            _belt_travel_to_right = dx < 0
+        
+        result =  _belt_travel_to_right == ( dx < 0 ) 
+    
+    return result
+
 
     
 def processDisparity(buff, count):
@@ -96,9 +120,10 @@ def processDisparity(buff, count):
     
     imgRef = buff.data[-1]
     h, w = imgRef.shape[:2]
-    z_buff = np.zeros((h,w,buff.comb))
+    #z_buff = np.zeros((h,w,buff.comb))
+    sumDisp = np.zeros((h,w))
     n = 0
-    dxMax = buff.x[0] - buff.x[-1]
+    dxMax = abs(buff.x[0] - buff.x[-1])
     
     print("Processing %s frames; Ref frame %s; Belt transport %s." % (buff.nItems(),count,dxMax))    
     for i in range(buff.nItems()-1,-1,-1):
@@ -107,19 +132,29 @@ def processDisparity(buff, count):
             imgL = buff.data[j]
             # stereo baseline
             dx = buff.x[j] - buff.x[i]
-            # reference translation
-            tdx = np.int(np.round(buff.x[i] - buff.x[-1]))
-            if debug:
-                print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-            disp = computeDisparity(imgL, imgR, dx)
-            disp = cctv.translateImg(disp, (-tdx, 0))
-            z_buff[:,:,n] = disp
-            n += 1
+            # check belt has consistent forward motion
+            if ok_belt_travel(dx): 
+                # reference translation
+                tdx = abs(np.int(np.round(buff.x[i] - buff.x[-1])))
+                dx = abs(dx)                                 
+                if dx>20:
+                    if debug:
+                        print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
+                    disp = computeDisparity(imgL, imgR, dx)  
+                    disp = cctv.translateImg(disp, (-tdx, 0))
+                    sumDisp = sumDisp + disp
+                    n += 1
+            else:
+                print('Belt Motion Error: imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
+                
     
     # compute sum and average disparity
-    sumDisp = np.sum(z_buff,axis=2)
-    avDisp = sumDisp.copy() / z_buff.shape[2] 
-    avDisp = np.uint8(cctv.rescale(avDisp, (0,255), (0.95, 1.25)))
+    if n>0:
+        avDisp = sumDisp / n
+    else:
+        avDisp = sumDisp
+    # note: rescale values (0.02, 0.18) set empirically
+    avDisp = np.uint8(cctv.rescale(avDisp, (0,255), (0.02, 0.15)))
     avDisp[:,-int(dxMax):-1] = 0
     vis_color = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET) 
     vis_mean = cctv.imfuse(imgRef, vis_color, 0.2)
@@ -179,12 +214,13 @@ def process(cam, params, *args):
             cv2.imshow('Disparity', out_frame)
             if debug:
                 ch = cv2.waitKey(0)
-                if ch == 27:
-                    cv2.destroyAllWindows()
-                    out.release()
-                    break
             else:
-                cv2.waitKey(1)
+                ch = cv2.waitKey(1)
+                
+            if ch == 27:
+                cv2.destroyAllWindows()
+                out.release()
+                break
         if count>=stop:
              cv2.destroyAllWindows()
              out.release()
@@ -217,11 +253,14 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
-    buffSize = 5
+    buffSize = 7
+    
+    global _belt_travel_to_right
+    _belt_travel_to_right = None
     
     # debug switch
     global debug
-    debug = True
+    debug = False
     
     # creates a temporary directory to save data generated at runtime
     global temp_path

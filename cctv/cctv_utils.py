@@ -98,6 +98,7 @@ def rescale(src, bounds, *args):
 
 def getBeltMotionByOpticalFlow(f0, f1):
     """
+    10.01.19 - now returns +ve or -ve dx vals (not abs())
     getBeltMotionByOpticalFlow(f0, f1) - find fisheries CCTV belt motion
     input:
         f0, f1 - consecutive video frames
@@ -146,7 +147,7 @@ def getBeltMotionByOpticalFlow(f0, f1):
         x0, y0 = pt0
         x1, y1 = pt1
         if abs(y0-y1) < 1:
-            dx.append(abs(x0-x1))
+            dx.append(x0-x1)
        
     return dx
 

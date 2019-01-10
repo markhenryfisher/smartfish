@@ -88,8 +88,8 @@ def sgbmDisparity(imgL, imgR, dx=0, fFlag=False):
     minDisp, numDisp = getDispRange(dx)
 
  
-    print('sgbm disparity, dx= ', dx)
-    print('minDisp: %s, numDisp: %s, windowSize: %s' % (minDisp,numDisp, windowSize))
+#    print('sgbm disparity, dx= ', dx)
+#    print('minDisp: %s, numDisp: %s, windowSize: %s' % (minDisp,numDisp, windowSize))
     
     if (numDisp<=0 or numDisp%16!=0):
         raise NameError('Incorrect max_disparity value: it should be positive and divisible by 16')
