@@ -29,7 +29,8 @@ def stereoPreprocess(imgL, imgR, dx, mix=0.25, template=None):
     stereoPreprocess - Implements all preprocessing steps for beltE
     """ 
     # make dx a conservative estimate so we should always find a match
-    dx = np.floor(dx-dx/50.0)
+    # Note: This is a balance!!!
+    dx = np.floor(dx-(dx / 20.0 ))
       
     # translate
     imgL = cctv.translateImg(imgL, (-dx, 0))

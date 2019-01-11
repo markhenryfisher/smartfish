@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+11.01.19 - introduced this_dx to fix problems with frames 73, 74 etc.
 10.01.19 - simplified how dispSum is computed. Changed how disparity is normalised.
             increased buffer size to 7 (gives ~ 150mm belt motion).
             Added function to check belt motion for consistency.
@@ -60,6 +61,7 @@ class FrameBuffer:
                     print('Warning: Tracker failed!!!')
                     x += 0
                 else:
+                    # print(dx)
                     x += median(dx)
             if len(self.data) < self.size:
                 pass
@@ -90,13 +92,13 @@ def computeDisparity(imgL, imgR, dx):
     # normalise disparity
     #out = ( dispL/16.0 + dx_ ) / dx 
     weight_factor = 1 / (dx_ + 1)
-    out = dispL / 16.0 * weight_factor
+    out = ( dispL / 16.0 ) * weight_factor
      
     return out
 
 def ok_belt_travel(dx):
     """
-    Checks that the belt is consistently moving forwards (or backwards)
+    Checks that the belt is consistently moving forwards
     """
     global _belt_travel_to_right
     
@@ -134,13 +136,21 @@ def processDisparity(buff, count):
             dx = buff.x[j] - buff.x[i]
             # check belt has consistent forward motion
             if ok_belt_travel(dx): 
+                # incremental motion
+                this_dx = abs(buff.x[j] - buff.x[j+1])
                 # reference translation
                 tdx = abs(np.int(np.round(buff.x[i] - buff.x[-1])))
-                dx = abs(dx)                                 
-                if dx>20:
+                dx = abs(dx) 
+#                if debug:
+#                    print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
+#                    print('this_dx= %s' % this_dx )                                
+                if dx>20 and this_dx>20:
                     if debug:
-                        print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-                    disp = computeDisparity(imgL, imgR, dx)  
+                        print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
+                    disp = computeDisparity(imgL, imgR, dx) 
+#                    if debug:
+#                        cv2.imshow('test', np.uint8(cctv.rescale(disp, (0,255))))
+#                        cv2.waitKey(0)
                     disp = cctv.translateImg(disp, (-tdx, 0))
                     sumDisp = sumDisp + disp
                     n += 1
@@ -154,7 +164,7 @@ def processDisparity(buff, count):
     else:
         avDisp = sumDisp
     # note: rescale values (0.02, 0.18) set empirically
-    avDisp = np.uint8(cctv.rescale(avDisp, (0,255), (0.02, 0.15)))
+    avDisp = np.uint8(cctv.rescale(avDisp, (0,255), (0.02, 0.25)))
     avDisp[:,-int(dxMax):-1] = 0
     vis_color = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET) 
     vis_mean = cctv.imfuse(imgRef, vis_color, 0.2)
