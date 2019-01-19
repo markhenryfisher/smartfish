@@ -98,6 +98,7 @@ def rescale(src, bounds, *args):
 
 def getBeltMotionByOpticalFlow(f0, f1):
     """
+    19.01.19 - changed param maxLevel 2 -> 3
     10.01.19 - now returns +ve or -ve dx vals (not abs())
     getBeltMotionByOpticalFlow(f0, f1) - find fisheries CCTV belt motion
     input:
@@ -106,7 +107,7 @@ def getBeltMotionByOpticalFlow(f0, f1):
         dx - estimate of belt travel (pixels)
     """   
     lk_params = dict( winSize  = (15, 15),
-                  maxLevel = 2,
+                  maxLevel = 3,
                   criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
 
