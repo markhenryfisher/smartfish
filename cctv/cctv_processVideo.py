@@ -38,7 +38,7 @@ class FrameBuffer:
             
         def __disp_comb(self):
             """
-            comb - find number of dissparity combinations supported by buffer
+            comb - find number of disparity combinations supported by buffer
             """
             n = int(0)
             for i in range(self.size-1,-1,-1):
