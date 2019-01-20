@@ -75,7 +75,7 @@ def process_video(video_name, lens_only, *args):
         if buff.direction is None or frame_i < start:
             k = cv2.waitKey(1)
         else:
-            k = cv2.waitKey(1000)             
+            k = cv2.waitKey(0)             
             
         if k == 27 or frame_i >= stop:
             break
@@ -95,5 +95,5 @@ def process_video(video_name, lens_only, *args):
 
 
 if __name__ == '__main__':
-    process_video('CQ2014-0GREEN-161125_112316-C3H-004-161130_212953_165', False, 5, 10, 20)
+    process_video('CQ2014-0GREEN-161125_112316-C3H-004-161130_212953_165', False, 5, 20, 200)
 #    play_video()

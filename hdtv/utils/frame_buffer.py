@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sun Jan 20 10:47:41 2019
+20.01.19 - changed median -> mean;
+20.01.19 - added __check_motion method 
 20.01.19 - No longer need to convert to gray as done by belt travel.
 
 @author: Mark
 """
 from belt import belt_travel as bt
-from statistics import median
+#from statistics import median
+import numpy as np
+
 
 class FrameBuffer:
     
@@ -39,11 +43,12 @@ class FrameBuffer:
             print('Warning: No Features to Track!!!')
             dx = 0
         else:
-            dx = median(dx)
-#            print('dx = %f' % dx)
+            #print(dx)
+            dx = np.mean(dx)
+            #print('dx = %f' % dx)
     
         if abs(dx) < threshold:
-            pass
+            dx = 0
         else:
             if dx < 0:
                 direction = 'forwards'

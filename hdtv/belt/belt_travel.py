@@ -7,7 +7,7 @@ Created on Sun Jan 20 10:53:04 2019
 
 def getBeltMotionByOpticalFlow(f0, f1):
     """
-    20.01.19 - maxLevel increased from 2->4
+    20.01.19 - maxLevel increased from 2->4; 
     17.01.19 - now a standalone function
     10.01.19 - now returns +ve or -ve dx vals (not abs())
     getBeltMotionByOpticalFlow(f0, f1) - find fisheries CCTV belt motion
@@ -24,7 +24,7 @@ def getBeltMotionByOpticalFlow(f0, f1):
     
     lk_params = dict( winSize  = (15, 15),
                   maxLevel = 4,
-                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
 
 
     feature_params = dict( maxCorners = 500,
@@ -63,7 +63,7 @@ def getBeltMotionByOpticalFlow(f0, f1):
     for pt0, pt1 in good_tracks:
         x0, y0 = pt0
         x1, y1 = pt1
-        if abs(y0-y1) < 1:
+        if abs(y0-y1) < 1.0:
             dx.append(x0-x1)
        
     return dx
