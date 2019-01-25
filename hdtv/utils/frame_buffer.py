@@ -14,13 +14,13 @@ import numpy as np
 
 class FrameBuffer:
     
-    def __init__(self, s):
+    def __init__(self, s, d):
         self.size = s
         self.data = []
         self.x = []
         self.count = 0
         self.comb = self.__disp_comb()
-        self.direction = None
+        self.direction = d
         
     def __disp_comb(self):
         """
@@ -33,34 +33,21 @@ class FrameBuffer:
         return n
     
     def __check_motion(self,f0,f1):
-        """
-        get motion check that direction of belt travel is consistant
-        """  
         threshold = 2
     
         dx = bt.getBeltMotionByOpticalFlow(f0, f1)
+        
         if len(dx) == 0:
             print('Warning: No Features to Track!!!')
             dx = 0
+        elif self.direction == 'backwards':
+            dx = np.max(dx)
         else:
-            #print(dx)
-            dx = np.mean(dx)
-            #print('dx = %f' % dx)
-    
+            dx = np.min(dx)
+                
         if abs(dx) < threshold:
             dx = 0
-        else:
-            if dx < 0:
-                direction = 'forwards'
-            else:
-                direction = 'backwards'
-                
-            if self.direction is None:
-                self.direction = direction
-            else:
-                if direction != self.direction:
-                    print('Warning: Tracking Error!!!')
-                    dx = 0
+    
         return dx
                 
         

@@ -3,6 +3,88 @@ from skimage.color import hsv2rgb
 from skimage.filters import roberts
 import cv2
 
+def highlight(left, right):
+    """
+    makes simple red/blue anaglyph (conventionally they are red/cyan)
+    """
+    if left.ndim == 3:
+        left_grey = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
+    else:
+        left_grey = left
+
+    if right.ndim == 3:
+        right_grey = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
+    else:
+        right_grey = right
+        
+    dst = left.copy()
+
+    dst[:,:,2] = left_grey
+    dst[:,:,0] = left_grey
+    dst[:,:,1] = right_grey
+    
+    return dst
+
+def anaglyph(left, right):
+    """
+    makes simple red/blue anaglyph (conventionally they are red/cyan)
+    """
+    if left.ndim == 3:
+        left_grey = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
+    else:
+        left_grey = left
+
+    if right.ndim == 3:
+        right_grey = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
+    else:
+        right_grey = right
+        
+    dst = left.copy()
+
+    dst[:,:,2] = left_grey
+    dst[:,:,0] = right_grey
+    dst[:,:,1] = np.zeros_like(right_grey)
+    
+    return dst
+
+def translateImg(img, delta):
+    """
+    translateImg - shift image by delta (dx, dy)
+    """
+    
+    dx, dy = delta
+    rows,cols = img.shape[:2]
+
+    M = np.float32([[1,0,dx],[0,1,dy]])
+    dst = cv2.warpAffine(img,M,(cols,rows))
+       
+    return dst
+
+def rescale(src, bounds, *args):
+    """
+    rescale - rescale data in (a,b)
+    y = rescale(x,bounds, minMax)
+    Note: minMax is an optional argument that sets m and M; this allows scalefactor 
+    to be set independently.
+    
+    """
+    x = np.float64(src.copy())
+    a, b = bounds
+    if len(args)>0:
+        m, M = args[0]
+        np.clip(x, m, M)
+    else:
+        m = np.min(x)
+        M = np.max(x)
+    
+    if M-m < np.finfo(np.float64).eps:
+        y = x
+    else:
+        y = (b-a) * (x-m)/(M-m) + a
+        
+    return y
+
+
 def drawGrid(vis, sqSz):
     """
     drawGrid(vis, sqSz) - draws square grid on image

@@ -3,20 +3,20 @@
 #@click.command()
 #@click.argument('video_name', type=str)
 #@click.option('--lens_only', is_flag=True, default=False)
+import os
 
+def process_video(video_name, lens_only, 
+                  buffSize = 5, start = 0, stop = 1000, direction = 'backwards', 
+                  iFlag = True, debug = False, temp_path = './'):
 
-def process_video(video_name, lens_only, *args):
     import sys
     import cv2
     from dataset import video_hd
     from utils import frame_buffer
     sys.path.append('C:/Users/Mark/opencv-master/samples/python')
     from common import draw_str
+    from stereo import stereo_utils
     
-    buffSize = args[0]
-    start = args[1]
-    stop = args[2]
-
     if video_name not in video_hd.VIDEO_NAME_TO_VIDEO:
         print('Could not find video named {}'.format(video_name))
         return
@@ -48,7 +48,7 @@ def process_video(video_name, lens_only, *args):
         belt_calib = video.belt_calibration
         mapping_x, mapping_y = belt_calib.lens_distort_rectilinear_mapping(lens_calib, img_shape)
 
-    buff = frame_buffer.FrameBuffer(buffSize)
+    buff = frame_buffer.FrameBuffer(buffSize, direction)
     
     for i in range(buffSize):
         success, img = cap.read()
@@ -72,9 +72,11 @@ def process_video(video_name, lens_only, *args):
 
         sys.stdout.write('\rFrame {}'.format(frame_i))
 
-        if buff.direction is None or frame_i < start:
+        if frame_i < start:
             k = cv2.waitKey(1)
         else:
+            out_frame = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
+            cv2.imshow('Stereo', out_frame)
             k = cv2.waitKey(0)             
             
         if k == 27 or frame_i >= stop:
@@ -95,5 +97,21 @@ def process_video(video_name, lens_only, *args):
 
 
 if __name__ == '__main__':
-    process_video('CQ2014-0GREEN-161125_112316-C3H-004-161130_212953_165', False, 5, 20, 200)
+    debug = True
+    temp_path = '../data/belt_images/SUMMER DAWN PD97/temp/'
+    # creates a temporary directory to save data generated at runtime
+    try:
+        os.makedirs(temp_path)
+    except OSError:
+        if os.path.isdir(temp_path):
+            pass
+    
+    process_video('CQ2014-0GREEN-161125_112316-C3H-004-161130_212953_165', False, 
+                  buffSize = 6, 
+                  start = 110, 
+                  stop = 120,
+                  direction = 'backwards',
+                  iFlag = False,
+                  debug = True,
+                  temp_path = temp_path)
 #    play_video()

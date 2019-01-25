@@ -5,9 +5,25 @@ Created on Sun Jan 20 10:53:04 2019
 @author: Mark
 """
 
+def cluster(dxdy,k): 
+    import numpy as np
+    from sklearn.cluster import KMeans
+    
+    X = np.asarray(dxdy)
+    
+    kmeans = KMeans(n_clusters=2)  
+    kmeans.fit(X)
+    
+    return kmeans.cluster_centers_
+    
+
 def getBeltMotionByOpticalFlow(f0, f1):
     """
-    20.01.19 - maxLevel increased from 2->4; 
+    23.01.19 - crop frames to give right-hand-side (i.e. cheat). We addopt this
+    strategy because although clustering works we need to track objects over several frames.
+    This means propagating cluster lables from one frame to another. We will look at this
+    at a later date.
+    22.01.19 - now look for two clusters (one due to an arm, one due to the belt;)
     17.01.19 - now a standalone function
     10.01.19 - now returns +ve or -ve dx vals (not abs())
     getBeltMotionByOpticalFlow(f0, f1) - find fisheries CCTV belt motion
@@ -18,23 +34,28 @@ def getBeltMotionByOpticalFlow(f0, f1):
     """    
     import cv2
     import numpy as np
-    
+
+     
+    h,w = f0.shape[:2]
     f0 = cv2.cvtColor(f0, cv2.COLOR_BGR2GRAY)
     f1 = cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
     
+    f0 = f0[:, w//2:-1]
+    f1 = f1[:, w//2:-1]
+    
     lk_params = dict( winSize  = (15, 15),
                   maxLevel = 4,
-                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
 
     feature_params = dict( maxCorners = 500,
-                       qualityLevel = 0.3,
+                       qualityLevel = 0.01, #0.3,
                        minDistance = 7,
                        blockSize = 7 )
       
     tracks = []
     good_tracks = []    
-    dx = []
+    dxdy = []
     
     mask = np.zeros_like(f0)
     mask[:] = 255
@@ -63,7 +84,9 @@ def getBeltMotionByOpticalFlow(f0, f1):
     for pt0, pt1 in good_tracks:
         x0, y0 = pt0
         x1, y1 = pt1
-        if abs(y0-y1) < 1.0:
-            dx.append(x0-x1)
-       
-    return dx
+        dxdy.append([x0-x1, y0-y1])
+            
+    centres = cluster(dxdy,2)
+    
+          
+    return centres[:,0]
