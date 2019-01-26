@@ -37,11 +37,13 @@ class FrameBuffer:
     
         dx = bt.getBeltMotionByOpticalFlow(f0, f1)
         
+        
         if len(dx) == 0:
             print('Warning: No Features to Track!!!')
             dx = 0
         elif self.direction == 'backwards':
             dx = np.max(dx)
+            
         else:
             dx = np.min(dx)
                 

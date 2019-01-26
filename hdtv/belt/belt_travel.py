@@ -5,6 +5,25 @@ Created on Sun Jan 20 10:53:04 2019
 @author: Mark
 """
 
+def refineBeltMotionByStructuralSimilarity(f0, f1, dx):
+    from utils import image_plotting as ip
+    from skimage.measure import compare_ssim as ssim
+#    import numpy as np
+#    import cv2
+    
+    sMax = 0
+    for delta in range (-2, +2):
+        temp = ip.translateImg(f1, (dx+delta, 0))
+#        vis = np.uint8(ip.blend(f0, temp, 0.5))
+#        cv2.imshow('vis', vis)
+#        cv2.waitKey(0)
+        s = ssim(f1, temp, multichannel=True)
+        if s > sMax:
+            sMax = s
+            delta_Best = delta
+            
+    return dx+delta_Best
+
 def cluster(dxdy,k): 
     import numpy as np
     from sklearn.cluster import KMeans

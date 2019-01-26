@@ -49,54 +49,57 @@ def process_video(video_name, lens_only,
         mapping_x, mapping_y = belt_calib.lens_distort_rectilinear_mapping(lens_calib, img_shape)
 
     buff = frame_buffer.FrameBuffer(buffSize, direction)
-    
-    for i in range(buffSize):
-        success, img = cap.read()
-        if not success:
-            raise ValueError('Failed to read video frame')
-        dst = cv2.remap(img, mapping_x, mapping_y, cv2.INTER_LINEAR)
-        if belt_calib is None:
-            # No belt calibration - crop
-            dst = dst[y:y+h, x:x+w]
-        buff.push(dst)
-
+    outvidfilename = None
+    if start > 0:
+        print('\nSpooling to Frame {}...'.format(start))
     frame_i = 0
-    while True:      
-        f = buff.data[-1]
-        x = buff.x[-1]
-        
-        vis = f.copy()
-        draw_str(vis, (20, 20), 'Frame: %d D: %.2f' %(frame_i,x))
-
-        cv2.imshow('Un-distorted', vis)
-
+    while True:
         sys.stdout.write('\rFrame {}'.format(frame_i))
 
         if frame_i < start:
-            k = cv2.waitKey(1)
+            success, img = cap.read()
+            if not success:
+                raise ValueError('Failed to read video frame')         
         else:
-            out_frame = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
-            cv2.imshow('Stereo', out_frame)
-            k = cv2.waitKey(0)             
+            while buff.count < buff.size:
+                success, img = cap.read()
+                if not success:
+                    raise ValueError('Failed to read video frame')
+                dst = cv2.remap(img, mapping_x, mapping_y, cv2.INTER_LINEAR)
+                if belt_calib is None:
+                    # No belt calibration - crop
+                    dst = dst[y:y+h, x:x+w]
+                buff.push(dst)
             
-        if k == 27 or frame_i >= stop:
-            break
+            f = buff.data[-1]
+            x = buff.x[-1]
+            out_frame = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
+            
+            if outvidfilename is None:
+                frame_height, frame_width = out_frame.shape[:2]
+                outvidfilename = temp_path+'outpy.avi'
+                out = cv2.VideoWriter(outvidfilename,cv2.VideoWriter_fourcc('M','J','P','G'), 5, (frame_width,frame_height))
 
-        __, __ = buff.pop()
-        success, img = cap.read()
-        if not success:
-            raise ValueError('Failed to read video frame')
-        dst = cv2.remap(img, mapping_x, mapping_y, cv2.INTER_LINEAR)
-        if belt_calib is None:
-            # No belt calibration - crop
-            dst = dst[y:y+h, x:x+w]
-        buff.push(dst)
+            vis = f.copy()
+            draw_str(vis, (20, 20), 'Frame: %d D: %.2f' %(frame_i,x))
+            cv2.imshow('Un-distorted', vis)
+            cv2.imshow('Stereo', out_frame)
+            out.write(out_frame)
+            
+            k = cv2.waitKey(1000)             
+            if k == 27 or frame_i >= stop:
+                break
+            
+            __, __ = buff.pop()
+
         frame_i += 1
 
     cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
+    start = 110
+    stop = 120
     debug = True
     temp_path = '../data/belt_images/SUMMER DAWN PD97/temp/'
     # creates a temporary directory to save data generated at runtime
@@ -108,8 +111,8 @@ if __name__ == '__main__':
     
     process_video('CQ2014-0GREEN-161125_112316-C3H-004-161130_212953_165', False, 
                   buffSize = 6, 
-                  start = 110, 
-                  stop = 120,
+                  start = start, 
+                  stop = stop,
                   direction = 'backwards',
                   iFlag = False,
                   debug = True,
