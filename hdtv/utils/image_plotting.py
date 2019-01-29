@@ -3,42 +3,23 @@ from skimage.color import hsv2rgb
 from skimage.filters import roberts
 import cv2
 
-def highlight(left, right):
+def overlay(foreground, background):
     """
-    makes simple red/blue anaglyph (conventionally they are red/cyan)
+    highlights foreground with background channel green
     """
-    if left.ndim == 3:
-        left_grey = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
-    else:
-        left_grey = left
-
-    if right.ndim == 3:
-        right_grey = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
-    else:
-        right_grey = right
-        
-    dst = left.copy()
-
-    dst[:,:,2] = left_grey
-    dst[:,:,0] = left_grey
-    dst[:,:,1] = right_grey
+    dst = np.uint8(rescale(foreground, (0,127)))
     
+    background = rescale(background, (128, 255))
+    dst[:,:,1] = np.uint8(rescale(dst[:,:,1] + background, (0, 255)))
+
     return dst
 
 def anaglyph(left, right):
     """
     makes simple red/blue anaglyph (conventionally they are red/cyan)
-    """
-    if left.ndim == 3:
-        left_grey = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
-    else:
-        left_grey = left
-
-    if right.ndim == 3:
-        right_grey = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
-    else:
-        right_grey = right
-        
+    """ 
+    left_grey = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
+    right_grey = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)  
     dst = left.copy()
 
     dst[:,:,2] = left_grey

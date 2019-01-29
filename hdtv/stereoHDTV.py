@@ -2,18 +2,32 @@
 """
 Created on Thu Jan 17 12:28:35 2019
 
+22.01.19 - added cluster function and tuned parameters to deal with hdtv problems
+
 @filename: devStereoHDTV
 @author: mark.fisher@uea.ac.uk
 """
 
 import cv2
 import numpy as np
-from statistics import median
 from utils import image_plotting as ip
 import argparse
+from sklearn.cluster import KMeans 
+from belt import belt_travel as bt
 
-def getBeltMotionByOpticalFlow(f0, f1):
+def cluster(dxdy,k): 
+    
+    X = np.asarray(dxdy)
+    
+    kmeans = KMeans(n_clusters=2)  
+    kmeans.fit(X)
+    
+    return kmeans.cluster_centers_
+    
+
+def getBeltMotionByOpticalFlow(img0, img1, template=None):
     """
+    25.01.19 - fails on hdtv. Implementing a range of temporary fixes.
     17.01.19 - now a standalone function
     10.01.19 - now returns +ve or -ve dx vals (not abs())
     getBeltMotionByOpticalFlow(f0, f1) - find fisheries CCTV belt motion
@@ -25,8 +39,12 @@ def getBeltMotionByOpticalFlow(f0, f1):
     import cv2
     import numpy as np
     
-    f0 = cv2.cvtColor(f0, cv2.COLOR_BGR2GRAY)
-    f1 = cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+    h,w = img0.shape[:2]
+    f0 = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
+    f1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+    
+    f0 = f0[:, w//2:-1]
+    f1 = f1[:, w//2:-1] 
     
     lk_params = dict( winSize  = (15, 15),
                   maxLevel = 4,
@@ -34,16 +52,20 @@ def getBeltMotionByOpticalFlow(f0, f1):
 
 
     feature_params = dict( maxCorners = 500,
-                       qualityLevel = 0.3,
+                       qualityLevel = 0.01, #0.3,
                        minDistance = 7,
                        blockSize = 7 )
       
     tracks = []
     good_tracks = []    
-    dx = []
+    dxdy = []
     
     mask = np.zeros_like(f0)
-    mask[:] = 255
+    if template is None:
+        mask[:] = 255
+    else:
+        mask = bt.match_template(f0, template)
+        mask = abs(mask-255)
     p = cv2.goodFeaturesToTrack(f0, mask = mask, **feature_params)
     temp1 = np.float32(p).reshape(-1, 2)
     if p is not None:
@@ -51,6 +73,15 @@ def getBeltMotionByOpticalFlow(f0, f1):
             tracks.append([(x, y)])
     else:
         raise Exception('No good Features to Track')
+
+    vis = cv2.cvtColor(f0.copy(), cv2.COLOR_GRAY2BGR ) 
+     # make list of point tuples [(x0, y0), (x1, y1), ...]
+    temp2 = [tr[-1] for tr in tracks]
+    for x, y in temp2:
+        cv2.circle(vis, (x, y), 2, (0, 255, 0), -1)    
+    cv2.imshow('good featuures: f0', vis)
+    
+    cv2.waitKey(0)       
         
     p0 = np.float32([tr[-1] for tr in tracks]).reshape(-1, 1, 2)
     # track forwards f0 -> f1
@@ -69,10 +100,12 @@ def getBeltMotionByOpticalFlow(f0, f1):
     for pt0, pt1 in good_tracks:
         x0, y0 = pt0
         x1, y1 = pt1
-        if abs(y0-y1) < 1:
-            dx.append(x0-x1)
-       
-    return dx
+        dxdy.append([x0-x1, y0-y1])
+            
+    centres = cluster(dxdy,2)
+    
+          
+    return centres[:,0]
 
 
 def rescale(src, bounds, *args):
@@ -87,7 +120,7 @@ def rescale(src, bounds, *args):
     a, b = bounds
     if len(args)>0:
         m, M = args[0]
-        cap(x, (m, M))
+        np.clip(x, m, M)
     else:
         m = np.min(x)
         M = np.max(x)
@@ -267,9 +300,9 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--root_path', type=str, default="../data/belt_images/SUMMER DAWN PD97/",
                         help='Root pathname.')
-    parser.add_argument('--f0name', type=str, default="frame_110.tif",
+    parser.add_argument('--f0name', type=str, default="frame_112.tif",
                         help='frame0 image filename.')
-    parser.add_argument('--f1name', type=str, default="frame_111.tif",
+    parser.add_argument('--f1name', type=str, default="frame_113.tif",
                         help='frame1 image filename.')
     args = parser.parse_args()
     
@@ -279,26 +312,49 @@ if __name__ == '__main__':
 
     args = parse_args()
     
+    temp_path = '../data/belt_images/SUMMER DAWN PD97/temp/'
+    
     # read frames
     f0 = cv2.imread(args.root_path+args.f0name)
     f1 = cv2.imread(args.root_path+args.f1name)
+    template = cv2.imread(temp_path+'template.tif', cv2.IMREAD_GRAYSCALE)
+    
+    mask = bt.match_template(cv2.cvtColor(f0, cv2.COLOR_BGR2GRAY), template)
+    vis = np.uint8(ip.blend(cv2.cvtColor(f0, cv2.COLOR_BGR2GRAY), mask, 0.5))
+    
+#    cv2.imshow('f0', f0)
+#    cv2.imshow('f1', f1)
+#    cv2.imshow('mask', vis)
+#    cv2.waitKey(0)
+    
+    
+    
+    dx = getBeltMotionByOpticalFlow(f0, f1, template)
+    print(dx)
+    dx = np.max(dx)
     
     # ensure belt motion is left-to-right
     rawR = np.flip(f0,axis=1)
     rawL = np.flip(f1,axis=1)
+    dx = -dx
     
-    dx = getBeltMotionByOpticalFlow(rawR, rawL)
-    if len(dx) == 0:
-        raise ValueError('Warning: Tracker failed!!!')
-    dx = median(dx)
+    filename = temp_path+"rawR"+args.f0name
+    cv2.imwrite(filename, rawR)
+    filename = temp_path+"rawL"+args.f1name
+    cv2.imwrite(filename, rawL)
+
+    
+    vis = ip.anaglyph(translateImg(rawL, (int(dx), 0)), rawR)
+    cv2.imshow('anaglyph', vis)
      
     imgL, imgR, dx_ = stereoPreprocess(rawL, rawR, dx)
+        
+#    cv2.imshow('rawL', rawL)
+#    cv2.imshow('rawR', rawR)
+#    cv2.imshow('imgL', imgL)
+#    cv2.imshow('imgR', imgR)
 #    
-#        
-    cv2.imshow('rawL', rawL)
-    cv2.imshow('rawR', rawR)
-    cv2.imshow('imgL', imgL)
-    cv2.imshow('imgR', imgR)
+#    ch = cv2.waitKey(0)
     
     #  compute disparity          
     dispL, dispR, wlsL, wlsConf = beltDisparity(imgL, imgR, dx=0, alg='sgbm', iFlag=False)

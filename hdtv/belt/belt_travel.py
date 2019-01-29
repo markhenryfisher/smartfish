@@ -5,6 +5,32 @@ Created on Sun Jan 20 10:53:04 2019
 @author: Mark
 """
 
+def match_template(img, template):
+    """
+    template_match - find areas of img that match template
+    """
+    import cv2
+    import numpy as np
+       
+#    # work with greyscale images
+#    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+#    template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+
+#    method = cv2.TM_SQDIFF_NORMED
+#    method = cv2.TM_CCORR_NORMED
+    method = cv2.TM_CCOEFF_NORMED
+    threshold = 0.8
+    mask = np.zeros_like(img)
+    
+    w,h = template.shape[::-1]
+    res = cv2.matchTemplate(img,template,method)
+    
+    loc = np.where( res >= threshold)
+    for pt in zip(*loc[::-1]):
+        mask[pt[1]:pt[1]+h+1, pt[0]:pt[0]+w+1] = 255
+    
+    return mask
+
 def refineBeltMotionByStructuralSimilarity(f0, f1, dx):
     from utils import image_plotting as ip
     from skimage.measure import compare_ssim as ssim
@@ -33,11 +59,18 @@ def cluster(dxdy,k):
     kmeans = KMeans(n_clusters=2)  
     kmeans.fit(X)
     
+    print(kmeans.cluster_centers_)
+    
+    print(kmeans.labels_)
+    
     return kmeans.cluster_centers_
     
 
-def getBeltMotionByOpticalFlow(f0, f1):
+def getBeltMotionByOpticalFlow(img0, img1, template=None):
     """
+    29.01.19 - Get lots of errors from belt. Invert mask to select other tracking features.
+    29.01.19 - tuned parameters for hdtv footage. Added 'mask' to identify belt.
+    replaced clustering by 'mode' (in frame buffer)
     23.01.19 - crop frames to give right-hand-side (i.e. cheat). We addopt this
     strategy because although clustering works we need to track objects over several frames.
     This means propagating cluster lables from one frame to another. We will look at this
@@ -55,29 +88,42 @@ def getBeltMotionByOpticalFlow(f0, f1):
     import numpy as np
 
      
-    h,w = f0.shape[:2]
-    f0 = cv2.cvtColor(f0, cv2.COLOR_BGR2GRAY)
-    f1 = cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+    h,w = img0.shape[:2]
+    f0 = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
+    f1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     
-    f0 = f0[:, w//2:-1]
-    f1 = f1[:, w//2:-1]
+    
+#    f0 = f0[:, w//2:-1]
+#    f1 = f1[:, w//2:-1]
     
     lk_params = dict( winSize  = (15, 15),
                   maxLevel = 4,
                   criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+#                  flags = cv2.OPTFLOW_USE_INITIAL_FLOW)
+#                  minEigThreshold = 1e-4 )
 
 
     feature_params = dict( maxCorners = 500,
-                       qualityLevel = 0.01, #0.3,
-                       minDistance = 7,
+                       qualityLevel = 0.3,
+                       minDistance = 15,
                        blockSize = 7 )
       
     tracks = []
     good_tracks = []    
-    dxdy = []
+    dx = []
     
     mask = np.zeros_like(f0)
-    mask[:] = 255
+    if template is None:
+        mask[:] = 255
+    else:
+        mask = match_template(f0, template)
+        # invert mask (avoid the belt!)
+        mask = abs(mask-255) 
+        
+#    cv2.imshow('mask', mask)
+#    cv2.waitKey(0)
+    
+
     p = cv2.goodFeaturesToTrack(f0, mask = mask, **feature_params)
     temp1 = np.float32(p).reshape(-1, 2)
     if p is not None:
@@ -85,6 +131,16 @@ def getBeltMotionByOpticalFlow(f0, f1):
             tracks.append([(x, y)])
     else:
         raise Exception('No good Features to Track')
+        
+#    vis = img0.copy()     
+#     # make list of point tuples [(x0, y0), (x1, y1), ...]
+#    temp2 = [tr[-1] for tr in tracks]
+#    for x, y in temp2:
+#        cv2.circle(vis, (x, y), 2, (0, 255, 0), -1)    
+#    cv2.imshow('good featuures: f0', vis)
+#    cv2.imshow('f1', img1)
+#    
+#    cv2.waitKey(0)
         
     p0 = np.float32([tr[-1] for tr in tracks]).reshape(-1, 1, 2)
     # track forwards f0 -> f1
@@ -103,9 +159,9 @@ def getBeltMotionByOpticalFlow(f0, f1):
     for pt0, pt1 in good_tracks:
         x0, y0 = pt0
         x1, y1 = pt1
-        dxdy.append([x0-x1, y0-y1])
+        if abs(y0-y1) < 1:
+            dx.append(x0-x1)
+       
+    return dx
             
-    centres = cluster(dxdy,2)
-    
-          
-    return centres[:,0]
+ 

@@ -48,7 +48,7 @@ def process_video(video_name, lens_only,
         belt_calib = video.belt_calibration
         mapping_x, mapping_y = belt_calib.lens_distort_rectilinear_mapping(lens_calib, img_shape)
 
-    buff = frame_buffer.FrameBuffer(buffSize, direction)
+    buff = frame_buffer.FrameBuffer(buffSize, direction, temp_path)
     outvidfilename = None
     if start > 0:
         print('\nSpooling to Frame {}...'.format(start))

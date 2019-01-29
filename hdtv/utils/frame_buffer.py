@@ -8,19 +8,20 @@ Created on Sun Jan 20 10:47:41 2019
 @author: Mark
 """
 from belt import belt_travel as bt
-#from statistics import median
 import numpy as np
+import cv2
 
 
 class FrameBuffer:
     
-    def __init__(self, s, d):
+    def __init__(self, s, d, path):
         self.size = s
         self.data = []
         self.x = []
         self.count = 0
         self.comb = self.__disp_comb()
         self.direction = d
+        self.template = cv2.imread(path+'template.tif', cv2.IMREAD_GRAYSCALE)
         
     def __disp_comb(self):
         """
@@ -35,17 +36,22 @@ class FrameBuffer:
     def __check_motion(self,f0,f1):
         threshold = 2
     
-        dx = bt.getBeltMotionByOpticalFlow(f0, f1)
+        dx = bt.getBeltMotionByOpticalFlow(f0, f1, self.template)
         
         
+        # this is a fudge. I really need a better way to detect belt motion
+        
+        dx = np.array(dx)
+        if self.direction == 'backwards':
+            dx = dx[dx >= 0]
+        else:
+            dx = dx[dx <= 0] 
+            
         if len(dx) == 0:
             print('Warning: No Features to Track!!!')
-            dx = 0
-        elif self.direction == 'backwards':
-            dx = np.max(dx)
-            
-        else:
-            dx = np.min(dx)
+            dx = 0    
+        else:         
+            dx = np.mean(dx)
                 
         if abs(dx) < threshold:
             dx = 0
