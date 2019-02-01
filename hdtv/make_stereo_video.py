@@ -7,7 +7,7 @@ import os
 
 def process_video(video_name, lens_only, 
                   buffSize = 5, start = 0, stop = 1000, direction = 'backwards', 
-                  iFlag = True, debug = False, temp_path = './'):
+                  iFlag = False, debug = False, temp_path = './'):
 
     import sys
     import cv2
@@ -16,6 +16,7 @@ def process_video(video_name, lens_only,
     sys.path.append('C:/Users/Mark/opencv-master/samples/python')
     from common import draw_str
     from stereo import stereo_utils
+    from utils import image_plotting as ip 
     
     if video_name not in video_hd.VIDEO_NAME_TO_VIDEO:
         print('Could not find video named {}'.format(video_name))
@@ -69,20 +70,27 @@ def process_video(video_name, lens_only,
                 if belt_calib is None:
                     # No belt calibration - crop
                     dst = dst[y:y+h, x:x+w]
-                buff.push(dst)
+                buff.push(img, dst)
             
+            r = buff.raw[-1]
             f = buff.data[-1]
             x = buff.x[-1]
-            out_frame = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
+            out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
             
+            # gather image frames and montage
+            vis0 = r.copy()
+            draw_str(vis0, (20, 20), 'Frame: %d D: %.2f' %(frame_i,x))
+            vis1 = f.copy()
+            draw_str(vis1, (20, 20), 'Rectified')
+            vis2 = out1.copy()
+            vis3 = out2.copy()
+            out_frame = ip.montage(2,2,(640, 480), vis0, vis1, vis2, vis3)
+
             if outvidfilename is None:
                 frame_height, frame_width = out_frame.shape[:2]
                 outvidfilename = temp_path+'outpy.avi'
                 out = cv2.VideoWriter(outvidfilename,cv2.VideoWriter_fourcc('M','J','P','G'), 5, (frame_width,frame_height))
 
-            vis = f.copy()
-            draw_str(vis, (20, 20), 'Frame: %d D: %.2f' %(frame_i,x))
-            cv2.imshow('Un-distorted', vis)
             cv2.imshow('Stereo', out_frame)
             out.write(out_frame)
             
@@ -90,7 +98,7 @@ def process_video(video_name, lens_only,
             if k == 27 or frame_i >= stop:
                 break
             
-            __, __ = buff.pop()
+            __, __, __ = buff.pop()
 
         frame_i += 1
 
@@ -101,7 +109,7 @@ if __name__ == '__main__':
     start = 110
     stop = 120
     debug = True
-    temp_path = '../data/belt_images/SUMMER DAWN PD97/temp/'
+    temp_path = '../data/belt_images/SUMMER DAWN PD97/'
     # creates a temporary directory to save data generated at runtime
     try:
         os.makedirs(temp_path)

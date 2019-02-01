@@ -19,8 +19,10 @@ def match_template(img, template):
 #    method = cv2.TM_SQDIFF_NORMED
 #    method = cv2.TM_CCORR_NORMED
     method = cv2.TM_CCOEFF_NORMED
-    threshold = 0.8
+    threshold = 0.7
     mask = np.zeros_like(img)
+    
+    
     
     w,h = template.shape[::-1]
     res = cv2.matchTemplate(img,template,method)
@@ -28,6 +30,11 @@ def match_template(img, template):
     loc = np.where( res >= threshold)
     for pt in zip(*loc[::-1]):
         mask[pt[1]:pt[1]+h+1, pt[0]:pt[0]+w+1] = 255
+    
+#    cv2.imshow('img', img)    
+#    cv2.imshow('template', template)
+#    cv2.imshow('mask', mask)
+#    cv2.waitKey(0)
     
     return mask
 
@@ -118,7 +125,7 @@ def getBeltMotionByOpticalFlow(img0, img1, template=None):
     else:
         mask = match_template(f0, template)
         # invert mask (avoid the belt!)
-        mask = abs(mask-255) 
+        mask = np.uint8(abs(np.int32(mask)-255)) 
         
 #    cv2.imshow('mask', mask)
 #    cv2.waitKey(0)

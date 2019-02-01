@@ -20,7 +20,7 @@ def tweek(imgL, imgR, dx):
     return dx+delta_Best
         
 
-def stereoPreprocess(imgL, imgR, dx, alpha = 0.25):
+def stereoPreprocess(imgL, imgR, dx, alpha = 0.25, k = 3):
     """
     stereoPreprocess - Prepares images for stereo disparity
     """  
@@ -41,8 +41,8 @@ def stereoPreprocess(imgL, imgR, dx, alpha = 0.25):
     # translate
     imgL = ip.translateImg(imgL, (dx, 0))
     # prefilter
-    edgeL = np.uint8(np.clip(abs(cv2.Sobel(imgL,cv2.CV_64F,1,0,ksize=5)), 0,255))
-    edgeR = np.uint8(np.clip(abs(cv2.Sobel(imgR,cv2.CV_64F,1,0,ksize=5)), 0,255))
+    edgeL = np.uint8(np.clip(abs(cv2.Sobel(imgL,cv2.CV_64F,1,0,ksize=k)), 0,255))
+    edgeR = np.uint8(np.clip(abs(cv2.Sobel(imgR,cv2.CV_64F,1,0,ksize=k)), 0,255))
     # blend edges and raw
     imgL = np.uint8(ip.blend(edgeL, imgL, alpha))
     imgR = np.uint8(ip.blend(edgeR, imgR, alpha))
@@ -82,8 +82,6 @@ def sgbmDisparity(imgL, imgR, dx=0, fFlag=False):
     windowSize = 15
     
     minDisp, numDisp = getDispRange(dx)
-    
-    minDisp = -1
 
  
 #    print('sgbm disparity, dx= ', dx)
@@ -290,10 +288,13 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     avDisp[:,-int(dxMax):-1] = 0
     if buff.direction == 'backwards':
         avDisp = np.fliplr(avDisp)
-#    vis_color = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET) 
-    vis_mean = ip.overlay(imgRef, avDisp)
+    out1 = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET)
+    draw_str(out1, (20,20), 'Disparity')
+    
+    
+    out2 = ip.overlay(imgRef, avDisp)
     frametxt = "Buff: %s-%s; %s Stereo Frames; Maxdx: %s." % (count,count+buff.nItems()-1,n,round(dxMax))    
-    draw_str(vis_mean, (20, 20), frametxt)
+    draw_str(out2, (20, 20), frametxt)
     
     
 #    glyph = ip.highlight(imgRef, avDisp)
@@ -310,7 +311,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
 #        filename = temp_path+"Sum"+str(count)+".jpg"
 #        cv2.imwrite(filename, vis_sum)
         filename = temp_path+"Mean"+str(count)+".jpg"
-        cv2.imwrite(filename, vis_mean)
+        cv2.imwrite(filename, out2)
         
         # display results on screen
 #        cv2.imshow('Sum'+str(count), cv2.applyColorMap(sumDisp, cv2.COLORMAP_JET))
@@ -320,4 +321,4 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
 ##        cv2.destroyWindow('Sum'+str(count))
 #        cv2.destroyWindow('Mean'+str(count))
          
-    return vis_mean
+    return out1, out2

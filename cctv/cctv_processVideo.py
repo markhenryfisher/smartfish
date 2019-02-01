@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+31.01.19 - results displayed as 'montage'
+30.01.19 - completely rewritten in same style as hdtv make_stereo_video
 11.01.19 - introduced this_dx to fix problems with frames 73, 74 etc.
 10.01.19 - simplified how dispSum is computed. Changed how disparity is normalised.
             increased buffer size to 7 (gives ~ 150mm belt motion).
@@ -15,234 +17,98 @@ Script to test cctv video input, FrameBuffer, Disparity
 @author: mark.fisher@uea.ac.uk
 @last_updated: 20.12.18
 """
-import numpy as np
-import cv2
-import sys
-sys.path.append('C:/Users/Mark/opencv-master/samples/python')
-from common import draw_str
-import cctv_utils as cctv
-import argparse
-from statistics import median
-import cctv_disparity as cctvDisp
-import os
-#import matplotlib.image as mpimg
 
-
-class FrameBuffer:
-        def __init__(self, s):
-            self.size = s
-            self.data = []
-            self.x = []
-            self.count = 0
-            self.comb = self.__disp_comb()
-            
-        def __disp_comb(self):
-            """
-            comb - find number of disparity combinations supported by buffer
-            """
-            n = int(0)
-            for i in range(self.size-1,-1,-1):
-                for j in range(i-1,-1,-1):
-                    n += 1
-                    
-            return n
-                    
-            
-        def push(self, f1):
-            if len(self.data) < 1:
-                x = 0.0
-            else:
-                f0 = self.data[0]
-                x = self.x[0]
-                f0Gray = cv2.cvtColor(f0, cv2.COLOR_BGR2GRAY)
-                f1Gray = cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
-                dx = cctv.getBeltMotionByOpticalFlow(f0Gray, f1Gray)
-                if len(dx) == 0:
-                    print('Warning: Tracker failed!!!')
-                    x += 0
-                else:
-                    # print(dx)
-                    x += median(dx)
-            if len(self.data) < self.size:
-                pass
-            else:
-                raise Exception('FrameBuffer: Buff Full!')            
-            self.data.insert(0, f1)
-            self.x.insert(0, x)
-            self.count += 1
-            
-        def pop(self):
-            self.count -= 1
-            return self.data.pop(), self.x.pop()
-            
-        def nItems(self):
-            return self.count
-
+import os      
+        
+def process_video(video_filename, cal_filename, 
+                  buffSize = 5, start = 0, stop = 1000, direction = 'backwards', 
+                  iFlag = False, debug = False, temp_path = './'):
+    
+    from utils import frame_buffer
+    from utils import cal_utils
+    from stereo import stereo_utils
+    from utils import image_plotting as ip 
+    import sys
+    sys.path.append('C:/Users/Mark/opencv-master/samples/python')
+    from common import draw_str
+    import cv2
+    
+    cameraParams = cal_utils.getCameraParams(cal_filename)
   
+    cap = cv2.VideoCapture(video_filename)
+    if not cap.isOpened():
+        print('Could not read video file {}'.format(video_filename))
+        return
+    
+    # Print the frame rate, number of frames and resolution
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    img_shape = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
-def computeDisparity(imgL, imgR, dx):
-    """
-    computeDisparity - run cctv stereo processing pipeline
-    """
-#    global template
+    print('Frame rate: {}, num frames: {}, shape: {}'.format(fps, num_frames, img_shape))
 
-    imgL, imgR, dx_ = cctvDisp.stereoPreprocess(imgL, imgR, dx)
-    dispL, dispR, wlsL, wlsConf = cctvDisp.cctvDisparity(imgL, imgR, dx, alg='sgbm', iFlag=True) 
-
-    # normalise disparity
-    #out = ( dispL/16.0 + dx_ ) / dx 
-    weight_factor = 1 / (dx_ + 1)
-    out = ( dispL / 16.0 ) * weight_factor
-     
-    return out
-
-def ok_belt_travel(dx):
-    """
-    Checks that the belt is consistently moving forwards
-    """
-    global _belt_travel_to_right
-    
-    thresh = 2
-
-    if abs(dx)<thresh:
-        result =  True
-    else:
-        if _belt_travel_to_right is None:
-            _belt_travel_to_right = dx < 0
-        
-        result =  _belt_travel_to_right == ( dx < 0 ) 
-    
-    return result
-
-
-    
-def processDisparity(buff, count):
-    global temp_path
-    global debug
-    
-    imgRef = buff.data[-1]
-    h, w = imgRef.shape[:2]
-    #z_buff = np.zeros((h,w,buff.comb))
-    sumDisp = np.zeros((h,w))
-    n = 0
-    dxMax = abs(buff.x[0] - buff.x[-1])
-    
-    print("Processing %s frames; Ref frame %s; Belt transport %s." % (buff.nItems(),count,dxMax))    
-    for i in range(buff.nItems()-1,-1,-1):
-        for j in range(i-1,-1,-1):
-            imgR = buff.data[i]
-            imgL = buff.data[j]
-            # stereo baseline
-            dx = buff.x[j] - buff.x[i]
-            # check belt has consistent forward motion
-            if ok_belt_travel(dx): 
-                # incremental motion
-                this_dx = abs(buff.x[j] - buff.x[j+1])
-                # reference translation
-                tdx = abs(np.int(np.round(buff.x[i] - buff.x[-1])))
-                dx = abs(dx) 
-#                if debug:
-#                    print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-#                    print('this_dx= %s' % this_dx )                                
-                if dx>20 and this_dx>20:
-                    if debug:
-                        print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-                    disp = computeDisparity(imgL, imgR, dx) 
-#                    if debug:
-#                        cv2.imshow('test', np.uint8(cctv.rescale(disp, (0,255))))
-#                        cv2.waitKey(0)
-                    disp = cctv.translateImg(disp, (-tdx, 0))
-                    sumDisp = sumDisp + disp
-                    n += 1
-            else:
-                print('Belt Motion Error: imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-                
-    
-    # compute sum and average disparity
-    if n>0:
-        avDisp = sumDisp / n
-    else:
-        avDisp = sumDisp
-    # note: rescale values (0.02, 0.18) set empirically
-    avDisp = np.uint8(cctv.rescale(avDisp, (0,255), (0.02, 0.25)))
-    avDisp[:,-int(dxMax):-1] = 0
-    vis_color = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET) 
-    vis_mean = cctv.imfuse(imgRef, vis_color, 0.2)
-#    vis_mean[:,-int(dxMax):-1] = 0
-    frametxt = "Ref frame: %s; Belt dx: %s." % (count,round(dxMax))    
-    draw_str(vis_mean, (20, 20), frametxt)
-    
-#    sumDisp = np.uint8(cctv.rescale(sumDisp, (0,255)))
-#    sumDisp[:,-int(dxMax):-1] = 0
-#    vis_color = cv2.applyColorMap(sumDisp, cv2.COLORMAP_JET)
-#    vis_sum = cctv.imfuse(imgRef, vis_color, 0.2)
-#    draw_str(vis_sum, (20, 20), frametxt)
-    
-    if debug:
-        # write results to file
-#        filename = temp_path+"Sum"+str(count)+".jpg"
-#        cv2.imwrite(filename, vis_sum)
-        filename = temp_path+"Mean"+str(count)+".jpg"
-        cv2.imwrite(filename, vis_mean)
-        
-        # display results on screen
-#        cv2.imshow('Sum'+str(count), cv2.applyColorMap(sumDisp, cv2.COLORMAP_JET))
-        cv2.imshow('Mean'+str(count), cv2.applyColorMap(avDisp, cv2.COLORMAP_JET))
-        
-        cv2.waitKey(0)
-#        cv2.destroyWindow('Sum'+str(count))
-        cv2.destroyWindow('Mean'+str(count))
-         
-    return vis_mean
-    
-        
-def process(cam, params, *args):
-    global debug
-    buffSize = args[0]
-    start = args[1]
-    stop = args[2]
-    count = 0
-    buff = FrameBuffer(buffSize)
-    
-    for i in range(buffSize):
-        _ret, f = cam.read()
-        f = cctv.rectify(f, params)
-        buff.push(f)
-    
+    buff = frame_buffer.FrameBuffer(buffSize, direction, temp_path)
+    outvidfilename = None
+    if start > 0:
+        print('\nSpooling to Frame {}...'.format(start))
+    frame_i = 0
     while True:
-        f = buff.data[-1]
-        x = buff.x[-1]
-        
-        vis = f.copy()
-        draw_str(vis, (20, 20), 'Frame: %d D: %f' %(count,x))
-    
-        if count>=start:
-            cv2.imwrite('../data/beltE' + str(count) + '.tif', f)
-            out_frame = processDisparity(buff, count)
-            out.write(out_frame)
-            cv2.imshow('video', vis)
-            cv2.imshow('Disparity', out_frame)
-            if debug:
-                ch = cv2.waitKey(0)
-            else:
-                ch = cv2.waitKey(1)
-                
-            if ch == 27:
-                cv2.destroyAllWindows()
-                out.release()
-                break
-        if count>=stop:
-             cv2.destroyAllWindows()
-             out.release()
-             break
+        sys.stdout.write('\rFrame {}'.format(frame_i))
+
+        if frame_i < start:
+            success, img = cap.read()
+            if not success:
+                raise ValueError('Failed to read video frame')         
+        else:
+            while buff.count < buff.size:
+                success, img = cap.read()
+                if not success:
+                    raise ValueError('Failed to read video frame')
+#                dst = cv2.remap(img, mapping_x, mapping_y, cv2.INTER_LINEAR)
+#                if belt_calib is None:
+#                    # No belt calibration - crop
+#                    dst = dst[y:y+h, x:x+w]
+                dst = cal_utils.rectify(img, cameraParams)
+                buff.push(img, dst)
             
-        f, x = buff.pop()
-        _ret, f = cam.read()
-        f = cctv.rectify(f, params)
-        buff.push(f)
-        count += 1
-        
+            r = buff.raw[-1]
+            f = buff.data[-1]
+            x = buff.x[-1]
+            out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
+            
+            # gather image frames and montage
+            vis0 = r.copy()
+            draw_str(vis0, (20, 20), 'Frame: %d D: %.2f' %(frame_i,x))
+            vis1 = f.copy()
+            draw_str(vis1, (20, 20), 'Rectified')
+            vis2 = out1.copy()
+            vis3 = out2.copy()
+            out_frame = ip.montage(2,2,(640, 480), vis0, vis1, vis2, vis3)
+
+            if outvidfilename is None:
+                frame_height, frame_width = out_frame.shape[:2]
+                outvidfilename = temp_path+'outpy.avi'
+                out = cv2.VideoWriter(outvidfilename,cv2.VideoWriter_fourcc('M','J','P','G'), 5, (frame_width,frame_height))
+
+            cv2.imshow('Stereo', out_frame)
+            out.write(out_frame)
+            
+            k = cv2.waitKey(10000)             
+            if k == 27 or frame_i >= stop:
+                break
+            
+            __, __, __ = buff.pop()
+
+        frame_i += 1
+
+    cv2.destroyAllWindows()
+    
+
+
+    
 def parse_args():
+    import argparse
+    
     parser = argparse.ArgumentParser(description='process video to find stereo disparity',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--root_path', type=str, default="../data/",
@@ -263,17 +129,9 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
-    buffSize = 7
-    
-    global _belt_travel_to_right
-    _belt_travel_to_right = None
-    
-    # debug switch
-    global debug
-    debug = False
+
     
     # creates a temporary directory to save data generated at runtime
-    global temp_path
     temp_path = args.root_path+'temp/'
     try:
         os.makedirs(temp_path)
@@ -281,23 +139,15 @@ if __name__ == '__main__':
         if os.path.isdir(temp_path):
             pass
     
-    # global variables
-    cameraParams = cctv.getCameraParams(args.root_path+args.cal_file)
-    # template not needed (03.01.19)
-#    global template
-#    template = cv2.imread(args.root_path+args.template_file,0)
-#    template = None
-    # for debug
-    #global z, vis
-
-    frame_width = 540
-    frame_height = 414
-    outvidfilename = temp_path+'outpy.avi'
-    out = cv2.VideoWriter(outvidfilename,cv2.VideoWriter_fourcc('M','J','P','G'), 5, (frame_width,frame_height))
     
-    print('Spooling to frame %s ...' % args.start)
-    cam = cv2.VideoCapture(args.root_path+args.video_file)
-    process(cam, cameraParams, buffSize, args.start, args.stop)
+    process_video(args.root_path+args.video_file, args.root_path+args.cal_file, 
+              buffSize = 7, 
+              start = args.start, 
+              stop = args.stop,
+              direction = 'forwards',
+              iFlag = False,
+              debug = True,
+              temp_path = temp_path)
     
     
     

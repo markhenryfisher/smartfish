@@ -3,6 +3,42 @@ from skimage.color import hsv2rgb
 from skimage.filters import roberts
 import cv2
 
+def montage(n,m,size,*args):
+    """
+    motage - combine multiple images.
+    Bugs - untested for > 2 x 2 
+    size = size of combined result
+    n = number of (sub-image) rows 
+    m = number of (sub-image) cols
+    """
+
+    w_final,h_final = size
+    h = h_final // n
+    w = w_final // m
+    
+    
+    # check and resize the individual images
+    if len(args) != (n*m):
+        raise ValueError('Insufficiant images to montage')
+    
+    # assemble images as a montage
+    count_i = 0
+    for i in range(n):
+        for j in range(m):
+            img = cv2.resize(args[count_i], (w,h))
+            count_i += 1
+            if j==0:
+                imstack_h = img
+            else:
+                imstack_h = np.hstack((imstack_h, img))
+            
+        if i==0:
+            imstack_v = imstack_h
+        else:
+            imstack_v = np.vstack((imstack_v, imstack_h))
+        
+    return imstack_v
+
 def overlay(foreground, background):
     """
     highlights foreground with background channel green
