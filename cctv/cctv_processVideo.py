@@ -93,8 +93,10 @@ def process_video(video_filename, cal_filename,
             cv2.imshow('Stereo', out_frame)
             out.write(out_frame)
             
-            k = cv2.waitKey(10000)             
+            k = cv2.waitKey(1000)             
             if k == 27 or frame_i >= stop:
+                cap.release()
+                out.release()
                 break
             
             __, __, __ = buff.pop()
@@ -120,7 +122,7 @@ def parse_args():
     parser.add_argument('--cal_file', type=str, default="beltE/cameraParams.yml",
                         help='calibration filename.')
     parser.add_argument('--start', type=int, default=55, help='Start at frame=start_idx')
-    parser.add_argument('--stop', type=int, default=200, help='Stop at frame=stop_idx')
+    parser.add_argument('--stop', type=int, default=300, help='Stop at frame=stop_idx')
     args = parser.parse_args()
     
     return args
