@@ -5,6 +5,27 @@ Spyder Editor
 This is a temporary script file.
 """
 
+def ground_truth(img, dx, template):
+    """
+    find belt mask
+    """
+    import cv2
+    from utils import image_plotting as ip
+    from belt import belt_travel as bt
+    
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img = ip.translateImg(img, (dx, 0))
+    mask = bt.match_template(img, template)
+    
+#    cv2.imshow('img', img)
+#    cv2.imshow('temp', template)
+#    cv2.imshow('mask', mask)
+#    cv2.waitKey(0)
+    
+    return mask
+    
+    
+
 def tweek(imgL, imgR, dx):
     from utils import image_plotting as ip
     from skimage.measure import compare_ssim as ssim
@@ -35,9 +56,9 @@ def stereoPreprocess(imgL, imgR, dx, alpha = 0.25, k = 3):
     imgR = cv2.equalizeHist(imgR)
     
     # make dx a conservative estimate so we should always find a match  
-    dx = tweek(imgL, imgR, int(dx))
-    dx = dx
-    print('Tweeked dx = %s' % dx)
+#    dx = tweek(imgL, imgR, int(dx))
+#    dx = dx
+#    print('Tweeked dx = %s' % dx)
     # translate
     imgL = ip.translateImg(imgL, (dx, 0))
     # prefilter
@@ -72,16 +93,21 @@ def getDispRange(dx):
     
     return minDisp, numDisp
 
-def sgbmDisparity(imgL, imgR, dx=0, fFlag=False):
+def sgbmDisparity(imgL, imgR, dx=0, fFlag=False, tFlag=False):
     """
     sgbmDisparity - compute disparity using semi-global block matching
-    Note: Set fFlag to filter output with weighted least squares 
+    Note: Set fFlag to filter output with weighted least squares
+    Set tFlag to find reference disparity on first pass
     """
     import cv2
      
     windowSize = 15
     
-    minDisp, numDisp = getDispRange(dx)
+    if tFlag:
+        minDisp = -7
+        numDisp = 16
+    else:
+        minDisp, numDisp = getDispRange(dx)
 
  
 #    print('sgbm disparity, dx= ', dx)
@@ -169,7 +195,7 @@ def bmDisparity(imgL, imgR, dx=0):
     # return raw disparity
     return dispL, dispR
 
-def findDisparity(imgL, imgR, dx=0, alg='sgbm', fFlag=False, iFlag=False):
+def findDisparity(imgL, imgR, dx=0, alg='sgbm', fFlag=False, iFlag=False, tFlag=False):
     """
     cctvDisparity - computes disparity
     """
@@ -178,7 +204,7 @@ def findDisparity(imgL, imgR, dx=0, alg='sgbm', fFlag=False, iFlag=False):
     wlsL = wlsConf = None
 
     if alg=='sgbm':
-        dispL, dispR, wlsL, wlsConf = sgbmDisparity(imgL, imgR, fFlag=fFlag)
+        dispL, dispR, wlsL, wlsConf = sgbmDisparity(imgL, imgR, fFlag=fFlag, tFlag=tFlag)
         
     elif alg=='bm':
         dispL, dispR = bmDisparity(imgL, imgR)
@@ -188,18 +214,24 @@ def findDisparity(imgL, imgR, dx=0, alg='sgbm', fFlag=False, iFlag=False):
     if iFlag:
         dispL = inpaintUnmatchedBlocks(np.float32(dispL))
     else:
-        dispL = np.clip(dispL, 0, 255)
+        #dispL = np.clip(dispL, 0, 255)
+        pass
         
     
         
     return dispL, dispR, wlsL, wlsConf
 
 
-def computeDisparity(imgL, imgR, dx, iFlag=True, debug=False):
+def computeDisparity(imgL, imgR, dx, template, iFlag=True, debug=False):
     """
     computeDisparity - run cctv stereo processing pipeline
     """
     import cv2
+    import numpy as np
+    from utils import image_plotting as ip
+    
+    
+    mask = ground_truth(imgL, dx, template)
 
     imgL, imgR, dx_ = stereoPreprocess(imgL, imgR, dx)
     
@@ -207,14 +239,38 @@ def computeDisparity(imgL, imgR, dx, iFlag=True, debug=False):
 #        cv2.imshow('preprocessedL', imgL)
 #        cv2.imshow('preprocessedR', imgR)
 #        cv2.waitKey(0)
-        
     
-    dispL, dispR, wlsL, wlsConf = findDisparity(imgL, imgR, dx, alg='sgbm', iFlag=iFlag) 
+    # 1st pass (find disparity of the belt): tFlag = True
+    testL, __, __, __ = findDisparity(imgL, imgR, dx, alg='sgbm', tFlag=True)
+    ground0 = np.zeros_like(mask)
+    loc = np.where( testL > -128)
+    ground0[loc] = 255
+    loc = np.where( mask == 0)
+    ground0[loc] = 0
+
+#    cv2.imshow('mask', mask)   
+#    cv2.imshow('ground', ground0)  
+#    cv2.waitKey(0)    
+
+    # apply a correction
+    gd0_dx = np.mean(testL[ground0>0]) / 16.0 
+    gd0_sd = np.std(testL[ground0>0]) / 16.0
+    adj = gd0_dx + (gd0_dx / abs(gd0_dx)) * gd0_sd
+#    print('stats: %s %s %s' % (gd0_dx, gd0_sd, adj))
+    imgL = ip.translateImg(imgL, (-adj, 0))
+    dx_ = dx_ - adj
+    print('Corrected dx = %s' % dx_ )
+    
+    dispL, dispR, wlsL, wlsConf = findDisparity(imgL, imgR, dx, alg='sgbm', iFlag=iFlag)     
+    loc = np.where( dispL == -16)
+    dispL[loc] = 0.0
+
 
     # normalise disparity
     #out = ( dispL/16.0 + dx_ ) / dx 
     weight_factor = 1 / (abs(dx_) + 1)
     out = ( dispL / 16.0 ) * weight_factor
+    
      
     return out
 
@@ -229,6 +285,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     import sys
     sys.path.append('C:/Users/Mark/opencv-master/samples/python')
     from common import draw_str
+    
     
     threshold = 20
     imgRef = buff.data[-1]
@@ -266,13 +323,13 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             if abs(dx)>threshold: #and this_dx>20:
                 if debug:
                     print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-                disp = computeDisparity(imgL, imgR, dx, iFlag, debug) 
+                disp = computeDisparity(imgL, imgR, dx, buff.template, iFlag, debug) 
                 disp = ip.translateImg(disp, (-tdx, 0))  
                 sumDisp = sumDisp + disp 
 #                if debug:
-#                    vis = np.uint8(ip.rescale(sumDisp, (0,255)))
+#                    vis = np.uint8(ip.rescale(disp, (0,255)))
 #                    vis_color = cv2.applyColorMap(vis, cv2.COLORMAP_JET)
-#                    cv2.imshow('sumDisp', vis_color)
+#                    cv2.imshow('disp', vis_color)
 #                    cv2.waitKey(0)
                 n += 1
                 
@@ -284,7 +341,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     else:
         avDisp = sumDisp
     
-    avDisp = np.uint8(ip.rescale(avDisp, (0,255), (0, 0.12)))
+    avDisp = np.uint8(ip.rescale(avDisp, (0,255), (0, 0.2)))
     avDisp[:,-int(dxMax):-1] = 0
     if buff.direction == 'backwards':
         avDisp = np.fliplr(avDisp)
@@ -306,12 +363,12 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
 #    vis_sum = cctv.imfuse(imgRef, vis_color, 0.2)
 #    draw_str(vis_sum, (20, 20), frametxt)
     
-    if debug:
+#    if debug:
         # write results to file
 #        filename = temp_path+"Sum"+str(count)+".jpg"
 #        cv2.imwrite(filename, vis_sum)
-        filename = temp_path+"Mean"+str(count)+".jpg"
-        cv2.imwrite(filename, out2)
+#        filename = temp_path+"Mean"+str(count)+".jpg"
+#        cv2.imwrite(filename, out2)
         
         # display results on screen
 #        cv2.imshow('Sum'+str(count), cv2.applyColorMap(sumDisp, cv2.COLORMAP_JET))

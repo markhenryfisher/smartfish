@@ -78,14 +78,24 @@ def process_video(video_name, lens_only,
             out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
             
             # gather image frames and montage
-            vis0 = r.copy()
+            vis0 = cv2.resize(r.copy(), (640, 480))
             draw_str(vis0, (20, 20), 'Frame: %d D: %.2f' %(frame_i,x))
             vis1 = f.copy()
             draw_str(vis1, (20, 20), 'Rectified')
             vis2 = out1.copy()
             vis3 = out2.copy()
             out_frame = ip.montage(2,2,(640, 480), vis0, vis1, vis2, vis3)
-
+            
+            if debug:
+                filename = temp_path+"raw"+str(frame_i)+".jpg"
+                cv2.imwrite(filename, r)
+                filename = temp_path+"frame_"+str(frame_i)+".jpg"
+                cv2.imwrite(filename, f)
+                filename = temp_path+"disp"+str(frame_i)+".jpg"
+                cv2.imwrite(filename, out1)
+                filename = temp_path+"overlay"+str(frame_i)+".jpg"
+                cv2.imwrite(filename, out2)
+                
             if outvidfilename is None:
                 frame_height, frame_width = out_frame.shape[:2]
                 outvidfilename = temp_path+'outpy.avi'
@@ -96,6 +106,8 @@ def process_video(video_name, lens_only,
             
             k = cv2.waitKey(1000)             
             if k == 27 or frame_i >= stop:
+                cap.release()
+                out.release()
                 break
             
             __, __, __ = buff.pop()
