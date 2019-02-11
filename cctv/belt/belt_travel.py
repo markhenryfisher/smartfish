@@ -5,7 +5,7 @@ Created on Sun Jan 20 10:53:04 2019
 @author: Mark
 """
 
-def match_template(img, template):
+def match_template(img, template, threshold=0.8):
     """
     template_match - find areas of img that match template
     """
@@ -19,7 +19,6 @@ def match_template(img, template):
 #    method = cv2.TM_SQDIFF_NORMED
 #    method = cv2.TM_CCORR_NORMED
     method = cv2.TM_CCOEFF_NORMED
-    threshold = 0.8
     mask = np.zeros_like(img)
     
     w,h = template.shape[::-1]
@@ -64,6 +63,36 @@ def cluster(dxdy,k):
     print(kmeans.labels_)
     
     return kmeans.cluster_centers_
+
+def getBeltMotionByTemplateMatching(img0, img1, max_travel=50):
+    """
+    09.02.19
+    getBeltMotionByTemplateMatching() - find fisheries CCTV belt motion
+    input:
+        img0, img1 - consecutive video frames
+        max_travel - max belt travel (default = +/- 50 pixels)
+    output:
+        dx - estimate of belt travel (pixels)
+        confidence - confidence in estimate (0.0 - 1.0) 
+    """
+    import cv2
+    
+    x,y = img0.shape[:2]
+    f0 = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
+    f1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+    
+    startx = max_travel
+    stopx = x-max_travel
+    template = f0[:,startx:stopx]
+    
+    # Apply template Matching
+    res = cv2.matchTemplate(f1,template,cv2.TM_SQDIFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+    
+    dx = min_loc[0] - max_travel
+    confidence = 1 - min_val
+    
+    return dx, confidence
     
 
 def getBeltMotionByOpticalFlow(img0, img1, template=None):
@@ -80,12 +109,14 @@ def getBeltMotionByOpticalFlow(img0, img1, template=None):
     10.01.19 - now returns +ve or -ve dx vals (not abs())
     getBeltMotionByOpticalFlow(f0, f1) - find fisheries CCTV belt motion
     input:
-        f0, f1 - consecutive video frames
+        img0, img1 - consecutive video frames
+        template - optional subimage of belt surface texture (used to locate belt regions)
     output:
-        dx - estimate of belt travel (pixels)
+        dx - list of estimates of belt travel (pixels)
     """    
     import cv2
     import numpy as np
+    from utils import image_plotting as ip
 
      
     h,w = img0.shape[:2]
@@ -116,13 +147,13 @@ def getBeltMotionByOpticalFlow(img0, img1, template=None):
     if template is None:
         mask[:] = 255
     else:
-        mask = match_template(f0, template)
+        mask = match_template(f0, template, 0.5)
         # invert mask (avoid the belt!)
-        mask = abs(mask-255) 
+        mask = np.uint8(abs(np.int32(mask)-255)) 
         
-#    cv2.imshow('mask', mask)
-#    cv2.waitKey(0)
-    
+    vis = np.uint8(ip.blend(mask,f0,0.5))    
+    cv2.imshow('mask', vis)
+    cv2.waitKey(1)
 
     p = cv2.goodFeaturesToTrack(f0, mask = mask, **feature_params)
     temp1 = np.float32(p).reshape(-1, 2)

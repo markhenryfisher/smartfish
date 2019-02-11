@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+09.02.19 - replaced getBeltTravelByOpticalFlow() with getBeltTravelByTemplateMatching()
+            Note: Also adopted convention that belt distance is +ve for left to right travel
 31.01.19 - results displayed as 'montage'
 30.01.19 - completely rewritten in same style as hdtv make_stereo_video
 11.01.19 - introduced this_dx to fix problems with frames 73, 74 etc.
@@ -93,7 +95,7 @@ def process_video(video_filename, cal_filename,
             cv2.imshow('Stereo', out_frame)
             out.write(out_frame)
             
-            k = cv2.waitKey(1000)             
+            k = cv2.waitKey(0)             
             if k == 27 or frame_i >= stop:
                 cap.release()
                 out.release()
@@ -121,6 +123,7 @@ def parse_args():
                         help='template filename.')
     parser.add_argument('--cal_file', type=str, default="beltE/cameraParams.yml",
                         help='calibration filename.')
+    # try 73 start for problem
     parser.add_argument('--start', type=int, default=55, help='Start at frame=start_idx')
     parser.add_argument('--stop', type=int, default=300, help='Stop at frame=stop_idx')
     args = parser.parse_args()
@@ -143,7 +146,7 @@ if __name__ == '__main__':
     
     
     process_video(args.root_path+args.video_file, args.root_path+args.cal_file, 
-              buffSize = 7, 
+              buffSize = 5, 
               start = args.start, 
               stop = args.stop,
               direction = 'forwards',

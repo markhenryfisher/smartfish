@@ -82,7 +82,7 @@ def rescale(src, bounds, *args):
     a, b = bounds
     if len(args)>0:
         m, M = args[0]
-        cap(x, (m, M))
+        np.clip(src, m, M)
     else:
         m = np.min(x)
         M = np.max(x)

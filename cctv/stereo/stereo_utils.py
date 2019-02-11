@@ -23,20 +23,20 @@ def ground_truth(img, dx, template):
     
     return mask
 
-def tweek(imgL, imgR, dx):
-    from utils import image_plotting as ip
-    from skimage.measure import compare_ssim as ssim
-    
-    delta_Best = 0
-    sMax = 0
-    for delta in range (-5, +5):
-        tempL = ip.translateImg(imgL, (dx+delta, 0))
-        s = ssim(imgR, tempL, multichannel=True)
-        if s > sMax:
-            sMax = s
-            delta_Best = delta
-        
-    return dx+delta_Best
+#def tweek(imgL, imgR, dx):
+#    from utils import image_plotting as ip
+#    from skimage.measure import compare_ssim as ssim
+#    
+#    delta_Best = 0
+#    sMax = 0
+#    for delta in range (-5, +5):
+#        tempL = ip.translateImg(imgL, (dx+delta, 0))
+#        s = ssim(imgR, tempL, multichannel=True)
+#        if s > sMax:
+#            sMax = s
+#            delta_Best = delta
+#        
+#    return dx+delta_Best
         
 
 def stereoPreprocess(imgL, imgR, dx, alpha = 0.25, k = 3):
@@ -59,7 +59,7 @@ def stereoPreprocess(imgL, imgR, dx, alpha = 0.25, k = 3):
 #    dx = dx
 #    print('Tweeked dx = %s' % dx)
     # translate
-    imgL = ip.translateImg(imgL, (dx, 0))
+    #imgL = ip.translateImg(imgL, (dx, 0))
     # prefilter
     edgeL = np.uint8(np.clip(abs(cv2.Sobel(imgL,cv2.CV_64F,1,0,ksize=k)), 0,255))
     edgeR = np.uint8(np.clip(abs(cv2.Sobel(imgR,cv2.CV_64F,1,0,ksize=k)), 0,255))
@@ -67,7 +67,7 @@ def stereoPreprocess(imgL, imgR, dx, alpha = 0.25, k = 3):
     imgL = np.uint8(ip.blend(edgeL, imgL, alpha))
     imgR = np.uint8(ip.blend(edgeR, imgR, alpha))
     
-    return imgL, imgR, dx
+    return imgL, imgR
 
 def inpaintUnmatchedBlocks(src):
     import numpy as np
@@ -92,7 +92,7 @@ def getDispRange(dx):
     
     return minDisp, numDisp
 
-def sgbmDisparity(imgL, imgR, dx=0, fFlag=False, tFlag=False):
+def sgbmDisparity(imgL, imgR, minDisp=0, numDisp= 16, fFlag=False, tFlag=False):
     """
     sgbmDisparity - compute disparity using semi-global block matching
     Note: Set fFlag to filter output with weighted least squares 
@@ -101,11 +101,11 @@ def sgbmDisparity(imgL, imgR, dx=0, fFlag=False, tFlag=False):
      
     windowSize = 15
     
-    if tFlag:
-        minDisp = -7
-        numDisp = 16
-    else:
-        minDisp, numDisp = getDispRange(dx)
+#    if tFlag:
+#        minDisp = -7
+#        numDisp = 16
+#    else:
+#        minDisp, numDisp = getDispRange(dx)
 
  
 #    print('sgbm disparity, dx= ', dx)
@@ -122,7 +122,7 @@ def sgbmDisparity(imgL, imgR, dx=0, fFlag=False, tFlag=False):
         blockSize = windowSize,
         P1 = 8*1*windowSize**2,
         P2 = 32*1*windowSize**2,
-        disp12MaxDiff = 1,
+        disp12MaxDiff = 5,
 #        preFilterCap = 63,
         uniquenessRatio = 5,
 #        speckleWindowSize = 25,
@@ -193,7 +193,7 @@ def bmDisparity(imgL, imgR, dx=0):
     # return raw disparity
     return dispL, dispR
 
-def findDisparity(imgL, imgR, dx=0, alg='sgbm', fFlag=False, iFlag=False, tFlag=False):
+def findDisparity(imgL, imgR, minDisp=0, numDisp=16, alg='sgbm', fFlag=False, iFlag=False):
     """
     cctvDisparity - computes disparity
     """
@@ -202,7 +202,7 @@ def findDisparity(imgL, imgR, dx=0, alg='sgbm', fFlag=False, iFlag=False, tFlag=
     wlsL = wlsConf = None
 
     if alg=='sgbm':
-        dispL, dispR, wlsL, wlsConf = sgbmDisparity(imgL, imgR, fFlag=fFlag)
+        dispL, dispR, wlsL, wlsConf = sgbmDisparity(imgL, imgR, minDisp, numDisp, fFlag=fFlag)
         
     elif alg=='bm':
         dispL, dispR = bmDisparity(imgL, imgR)
@@ -212,7 +212,8 @@ def findDisparity(imgL, imgR, dx=0, alg='sgbm', fFlag=False, iFlag=False, tFlag=
     if iFlag:
         dispL = inpaintUnmatchedBlocks(np.float32(dispL))
     else:
-        dispL = np.clip(dispL, 0, 255)
+#        dispL = np.clip(dispL, 0, 255)
+        pass
         
     
         
@@ -231,40 +232,46 @@ def computeDisparity(imgL, imgR, dx, template, iFlag=True, debug=False):
     mask = ground_truth(imgL, dx, template)
 
 
-    imgL, imgR, dx_ = stereoPreprocess(imgL, imgR, dx)
+    imgL, imgR = stereoPreprocess(imgL, imgR, dx)
     
 #    if debug:
 #        cv2.imshow('preprocessedL', imgL)
 #        cv2.imshow('preprocessedR', imgR)
 #        cv2.waitKey(0)
 
-    # 1st pass (find disparity of the belt): tFlag = True
-    testL, __, __, __ = findDisparity(imgL, imgR, dx, alg='sgbm', tFlag=True)
-    ground0 = np.zeros_like(mask)
-    loc = np.where( testL > -128)
-    ground0[loc] = 255
-    loc = np.where( mask == 0)
-    ground0[loc] = 0
-
-#    cv2.imshow('mask', mask)   
-#    cv2.imshow('ground', ground0)  
-#    cv2.waitKey(0)    
-
-    # apply a correction
-    gd0_dx = np.mean(testL[ground0>0]) / 16.0 
-    gd0_sd = np.std(testL[ground0>0]) / 16.0
-    adj = gd0_dx + (gd0_dx / abs(gd0_dx)) * gd0_sd
+#    # 1st pass (find disparity of the belt):
+#    minDisp=-7
+#    numDisp=16
+#    testL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp, numDisp, alg='sgbm')
+#    ground0 = np.zeros_like(mask)
+#    loc = np.where( testL > ((minDisp-1)*16))
+#    ground0[loc] = 255
+#    loc = np.where( mask == 0)
+#    ground0[loc] = 0
+#
+##    cv2.imshow('mask', mask)   
+##    cv2.imshow('ground0', ground0)  
+##    cv2.waitKey(0)    
+#
+#    # apply a correction
+#    gd0_dx = np.mean(testL[ground0>0]) / 16.0 
+#    gd0_sd = np.std(testL[ground0>0]) / 16.0
+#    adj = gd0_dx + gd0_sd
 #    print('stats: %s %s %s' % (gd0_dx, gd0_sd, adj))
-    imgL = ip.translateImg(imgL, (adj, 0))
-    dx_ = dx_ + adj
-    print('Corrected dx = %s' % dx_ )
+##    minDisp = - int(round(adj))
+    minDisp = -1
+    numDisp=16
+    dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp, numDisp, alg='sgbm', iFlag=iFlag)
+       
         
-    
-    dispL, dispR, wlsL, wlsConf = findDisparity(imgL, imgR, dx, alg='sgbm', iFlag=iFlag) 
+    # set unmatched pixels to minDisp
+    dispL[np.where( dispL == ((minDisp-1)*16))] = minDisp*16
+    # make all pixels +ve
+    dispL = dispL - (minDisp*16)
 
     # normalise disparity
     #out = ( dispL/16.0 + dx_ ) / dx 
-    weight_factor = 1 / (abs(dx_) + 1)
+    weight_factor = 1 / (abs(dx) + 1)
     out = ( dispL / 16.0 ) * weight_factor
      
     return out
@@ -294,7 +301,8 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             imgR = buff.data[i]
             imgL = buff.data[j]
             # stereo baseline
-            dx = buff.x[j] - buff.x[i]
+##            dx = buff.x[j] - buff.x[i]
+            dx = buff.x[i] - buff.x[j]
             
             # we assume belt moves left-to-right
             if buff.direction == 'backwards':
@@ -305,7 +313,8 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             # incremental motion
             #this_dx = abs(buff.x[j] - buff.x[j+1])
             # reference translation
-            tdx = abs(np.int(np.round(buff.x[i] - buff.x[-1])))
+##            tdx = abs(np.int(np.round(buff.x[i] - buff.x[-1])))
+            tdx = abs(np.int(np.round(buff.x[-1] - buff.x[i])))
 #            dx = abs(dx) 
             if debug:
                 print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
@@ -315,16 +324,15 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
                 filename = temp_path+"imgL"+str(count)+".jpg"
                 cv2.imwrite(filename, imgL)                                
             if abs(dx)>threshold: #and this_dx>20:
-                if debug:
-                    print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-                disp = computeDisparity(imgL, imgR, dx, buff.template, iFlag, debug) 
+                print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
+                disp = computeDisparity(imgL, imgR, dx, buff.template, iFlag, debug)
+#                if debug:
+#                    vis = np.uint8(ip.rescale(disp, (0,255)))
+#                    vis_color = cv2.applyColorMap(vis, cv2.COLORMAP_JET)
+#                    cv2.imshow('Disp', vis_color)
+#                    cv2.waitKey(500)
                 disp = ip.translateImg(disp, (-tdx, 0))  
                 sumDisp = sumDisp + disp 
-#                if debug:
-#                    vis = np.uint8(ip.rescale(sumDisp, (0,255)))
-#                    vis_color = cv2.applyColorMap(vis, cv2.COLORMAP_JET)
-#                    cv2.imshow('sumDisp', vis_color)
-#                    cv2.waitKey(0)
                 n += 1
                 
 #    if debug:
@@ -336,7 +344,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         avDisp = sumDisp
     
     #rescaling set empirically: cctv = (0.02, 0.25) hdtv = (0, 0.12)
-    avDisp = np.uint8(ip.rescale(avDisp, (0,255), (0, 0.2)))
+    avDisp = np.uint8(ip.rescale(avDisp, (0,255), (0, 0.1)))
     avDisp[:,-int(dxMax):-1] = 0
     if buff.direction == 'backwards':
         avDisp = np.fliplr(avDisp)

@@ -35,28 +35,22 @@ class FrameBuffer:
         return n
     
     def __check_motion(self,f0,f1):
-        threshold = 2
-    
-        dx = bt.getBeltMotionByOpticalFlow(f0, f1, self.template)
-        
-        
-        # this is a fudge. I really need a better way to detect belt motion
-        
-        dx = np.array(dx)
-        if self.direction == 'backwards':
-            dx = dx[dx >= 0]
-        else:
-            dx = dx[dx <= 0] 
+#        dx = bt.getBeltMotionByOpticalFlow(f0, f1, self.template)
+#        
+#        dx = np.array(dx)
+#        
+##        print(dx)
+#            
+#        if len(dx) == 0:
+#            print('Warning: No Features to Track!!!')
+#            dx = 0    
+#        else:         
+#            dx = np.mean(dx)
             
-        if len(dx) == 0:
-            print('Warning: No Features to Track!!!')
-            dx = 0    
-        else:         
-            dx = np.mean(dx)
-                
-        if abs(dx) < threshold:
-            dx = 0
-    
+        dx, conf = bt.getBeltMotionByTemplateMatching(f0, f1)
+        if conf < 0.9:
+            print('Warning: No Confidence in Belt Position!!!')
+        
         return dx
                 
         
