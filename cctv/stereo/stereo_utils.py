@@ -294,7 +294,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     #z_buff = np.zeros((h,w,buff.comb))
     sumDisp = np.zeros((h,w))
     n = 0
-    dxMax = abs(buff.x[0] - buff.x[-1])
+    dxMax = buff.getLargestStereoBaseline()
     print("\nProcessing %s frames; Ref frame %s; Belt transport %s." % (buff.nItems(),count,dxMax))    
     for i in range(buff.nItems()-1,-1,-1):
         for j in range(i-1,-1,-1):
@@ -349,13 +349,8 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     if buff.direction == 'backwards':
         avDisp = np.fliplr(avDisp)
     
-    out1 = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET)
-    draw_str(out1, (20,20), 'Disparity')
-    
-    
+    out1 = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET)   
     out2 = ip.overlay(imgRef, avDisp)
-    frametxt = "Buff: %s-%s; %s Stereo Frames; Maxdx: %s." % (count,count+buff.nItems()-1,n,round(dxMax))    
-    draw_str(out2, (20, 20), frametxt)
     
     
 #    glyph = ip.highlight(imgRef, avDisp)

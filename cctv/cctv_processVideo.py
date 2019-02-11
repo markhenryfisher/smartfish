@@ -20,7 +20,9 @@ Script to test cctv video input, FrameBuffer, Disparity
 @last_updated: 20.12.18
 """
 
-import os      
+import os
+global minViableStereoBaseline
+minViableStereoBaseline = 70      
         
 def process_video(video_filename, cal_filename, 
                   buffSize = 5, start = 0, stop = 1000, direction = 'backwards', 
@@ -34,6 +36,7 @@ def process_video(video_filename, cal_filename,
     sys.path.append('C:/Users/Mark/opencv-master/samples/python')
     from common import draw_str
     import cv2
+    import numpy as np
     
     cameraParams = cal_utils.getCameraParams(cal_filename)
   
@@ -51,11 +54,17 @@ def process_video(video_filename, cal_filename,
 
     buff = frame_buffer.FrameBuffer(buffSize, direction, temp_path)
     outvidfilename = None
+    
+    out1 = out2 = np.zeros(img_shape, dtype=np.ubyte)
+    out1 = cv2.applyColorMap(out1, cv2.COLORMAP_JET)
+    out2 = cv2.applyColorMap(out2, cv2.COLORMAP_JET)
+    
+    
     if start > 0:
         print('\nSpooling to Frame {}...'.format(start))
     frame_i = 0
     while True:
-        sys.stdout.write('\rFrame {}'.format(frame_i))
+#        sys.stdout.write('\rFrame {}'.format(frame_i))
 
         if frame_i < start:
             success, img = cap.read()
@@ -73,10 +82,17 @@ def process_video(video_filename, cal_filename,
                 dst = cal_utils.rectify(img, cameraParams)
                 buff.push(img, dst)
             
+            print('Frame {}'.format(frame_i))
             r = buff.raw[-1]
             f = buff.data[-1]
             x = buff.x[-1]
-            out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
+            
+            # compute disparity if sufficient stereo baseline
+            if buff.getLargestStereoBaseline() > minViableStereoBaseline:
+                out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
+            else:
+                out1 = ip.translateImg(out1, (buff.getLastdx(), 0))
+                out2 = ip.translateImg(out2, (buff.getLastdx(), 0))
             
             # gather image frames and montage
             vis0 = r.copy()
@@ -84,7 +100,11 @@ def process_video(video_filename, cal_filename,
             vis1 = f.copy()
             draw_str(vis1, (20, 20), 'Rectified')
             vis2 = out1.copy()
+            draw_str(vis2, (20,20), 'Disparity')
             vis3 = out2.copy()
+            frametxt = "Buff: %s-%s; Largest Stereo Baseline: %s." % (frame_i,frame_i+buff.nItems()-1,round(buff.getLargestStereoBaseline()))    
+            draw_str(vis3, (20, 20), frametxt)
+
             out_frame = ip.montage(2,2,(640, 480), vis0, vis1, vis2, vis3)
 
             if outvidfilename is None:
@@ -95,7 +115,7 @@ def process_video(video_filename, cal_filename,
             cv2.imshow('Stereo', out_frame)
             out.write(out_frame)
             
-            k = cv2.waitKey(0)             
+            k = cv2.waitKey(1)             
             if k == 27 or frame_i >= stop:
                 cap.release()
                 out.release()

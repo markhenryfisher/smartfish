@@ -24,6 +24,17 @@ class FrameBuffer:
         self.direction = d
         self.template = cv2.imread(path+'template.tif', cv2.IMREAD_GRAYSCALE)
         
+    def __reset(self, r, f):
+        """
+        reset the buffer
+        """
+        self.raw = []
+        self.data = []
+        self.x = []
+        self.count = 0
+        self.push(r,f)
+        
+        
     def __disp_comb(self):
         """
         comb - find number of dissparity combinations supported by buffer
@@ -46,31 +57,43 @@ class FrameBuffer:
 #            dx = 0    
 #        else:         
 #            dx = np.mean(dx)
-            
+        err = False    
         dx, conf = bt.getBeltMotionByTemplateMatching(f0, f1)
-        if conf < 0.9:
-            print('Warning: No Confidence in Belt Position!!!')
-        
-        return dx
+        if conf < 0.9 or dx < 0:
+            err = True
+            
+        return dx, err
                 
         
     def push(self, r1, f1):
         if len(self.data) < 1:
             x = 0.0
+            err = False
         else:
             f0 = self.data[0]
             x = self.x[0]
-            x += self.__check_motion(f0, f1)
-            
-        if len(self.data) < self.size:
-            self.raw.insert(0, r1)
-            self.data.insert(0, f1)
-            self.x.insert(0, x)
-            self.count += 1
+            dx, err = self.__check_motion(f0, f1)
+            x += dx
+        
+        if err:
+            print('Belt transport tracking Error...resetting buffer')
+            self.__reset(r1,f1)
         else:
-            raise Exception('FrameBuffer: Buff Full!')            
+            if len(self.data) < self.size:
+                self.raw.insert(0, r1)
+                self.data.insert(0, f1)
+                self.x.insert(0, x)
+                self.count += 1
+            else:
+                raise Exception('FrameBuffer: Buff Full!')
         
-        
+    
+    def getLargestStereoBaseline(self):
+        return abs(self.x[0] -  self.x[-1])
+    
+    def getLastdx(self):
+        return self.x[-2] - self.x[-1]
+                
     def pop(self):
         self.count -= 1
         return self.raw.pop(), self.data.pop(), self.x.pop()
