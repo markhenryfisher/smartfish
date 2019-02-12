@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+11.02.19 - added 'reset' feature to frame buffer.
 09.02.19 - replaced getBeltTravelByOpticalFlow() with getBeltTravelByTemplateMatching()
             Note: Also adopted convention that belt distance is +ve for left to right travel
 31.01.19 - results displayed as 'montage'
@@ -55,9 +56,9 @@ def process_video(video_filename, cal_filename,
     buff = frame_buffer.FrameBuffer(buffSize, direction, temp_path)
     outvidfilename = None
     
-    out1 = out2 = np.zeros(img_shape, dtype=np.ubyte)
-    out1 = cv2.applyColorMap(out1, cv2.COLORMAP_JET)
-    out2 = cv2.applyColorMap(out2, cv2.COLORMAP_JET)
+#    out1 = out2 = np.zeros(img_shape, dtype=np.ubyte)
+#    out1 = cv2.applyColorMap(out1, cv2.COLORMAP_JET)
+#    out2 = cv2.applyColorMap(out2, cv2.COLORMAP_JET)
     
     
     if start > 0:
@@ -75,10 +76,7 @@ def process_video(video_filename, cal_filename,
                 success, img = cap.read()
                 if not success:
                     raise ValueError('Failed to read video frame')
-#                dst = cv2.remap(img, mapping_x, mapping_y, cv2.INTER_LINEAR)
-#                if belt_calib is None:
-#                    # No belt calibration - crop
-#                    dst = dst[y:y+h, x:x+w]
+
                 dst = cal_utils.rectify(img, cameraParams)
                 buff.push(img, dst)
             
@@ -88,7 +86,9 @@ def process_video(video_filename, cal_filename,
             x = buff.x[-1]
             
             # compute disparity if sufficient stereo baseline
-            if buff.getLargestStereoBaseline() > minViableStereoBaseline:
+            if x == 0:
+                out1 = out2 = cv2.applyColorMap(np.zeros(img_shape, dtype=np.ubyte), cv2.COLORMAP_JET)
+            elif buff.getLargestStereoBaseline() > minViableStereoBaseline:
                 out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
             else:
                 out1 = ip.translateImg(out1, (buff.getLastdx(), 0))
@@ -144,8 +144,8 @@ def parse_args():
     parser.add_argument('--cal_file', type=str, default="beltE/cameraParams.yml",
                         help='calibration filename.')
     # try 73 start for problem
-    parser.add_argument('--start', type=int, default=55, help='Start at frame=start_idx')
-    parser.add_argument('--stop', type=int, default=300, help='Stop at frame=stop_idx')
+    parser.add_argument('--start', type=int, default=50, help='Start at frame=start_idx')
+    parser.add_argument('--stop', type=int, default=500, help='Stop at frame=stop_idx')
     args = parser.parse_args()
     
     return args
@@ -166,7 +166,7 @@ if __name__ == '__main__':
     
     
     process_video(args.root_path+args.video_file, args.root_path+args.cal_file, 
-              buffSize = 5, 
+              buffSize = 7, 
               start = args.start, 
               stop = args.stop,
               direction = 'forwards',
