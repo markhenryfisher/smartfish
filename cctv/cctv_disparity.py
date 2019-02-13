@@ -37,9 +37,9 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--root_path', type=str, default="../data/",
                         help='Root pathname.')
-    parser.add_argument('--nameL', type=str, default="beltE59.tif",
+    parser.add_argument('--frameL', type=int, default=58,
                         help='Left image filename.')
-    parser.add_argument('--nameR', type=str, default="beltE55.tif",
+    parser.add_argument('--frameR', type=int, default=55,
                         help='Right image filename.')
     args = parser.parse_args()
     
@@ -61,12 +61,24 @@ if __name__ == '__main__':
             pass
         
     # read images
-    rawL = cv2.imread(args.root_path+args.nameL)
-    rawR = cv2.imread(args.root_path+args.nameR)  
+    right_filename = args.root_path+'beltE'+str(args.frameR)+'.tif'
+    left_filename = args.root_path+'beltE'+str(args.frameL)+'.tif'
+    print('Right = '+ right_filename+' Left = '+ left_filename)
+    rawR = cv2.imread(right_filename)
+    rawL = cv2.imread(left_filename)  
     
-    dx, __ = bt.getBeltMotionByTemplateMatching(rawR, rawL,  max_travel=100) 
-    print('Stereo Baseline = {}'.format(dx))
-        
+    # find stereo baseline
+    baseline = 0
+    for i in range(args.frameR, args.frameL):
+      imgR = cv2.imread(args.root_path+'beltE'+str(i)+'.tif')
+      imgL = cv2.imread(args.root_path+'beltE'+str(i+1)+'.tif')
+      dx, __ = bt.getBeltMotionByTemplateMatching(imgR, imgL) 
+      baseline += dx
+      
+    print('Stereo Baseline = {}'.format(baseline))  
+
+
+    
     imgL, imgR = stereo_utils.stereoPreprocess(rawL, rawR)
         
     cv2.imshow('rawL', rawL)
@@ -75,11 +87,11 @@ if __name__ == '__main__':
     cv2.imshow('imgR', imgR)
     
     #  compute disparity          
-    dispL, __, __, __ = stereo_utils.findDisparity(ip.translateImg(imgL, (-dx, 0)), imgR, minDisp=minDisp, numDisp=numDisp)
+    dispL, __, __, __ = stereo_utils.findDisparity(ip.translateImg(imgL, (-baseline, 0)), imgR, minDisp=minDisp, numDisp=numDisp)
  
     h,w = dispL.shape
     offset = min([minDisp, 0])
-    dispL[:,w-dx+offset:w] = minDisp*16
+    dispL[:,w-baseline+offset:w] = minDisp*16
     p = proportion_of_matched_pixels(dispL, minDisp, numDisp)
     print('Fraction of Matched Pixels = {0:0.2f}'.format(p))
   
