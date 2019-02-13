@@ -37,7 +37,7 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--root_path', type=str, default="../data/",
                         help='Root pathname.')
-    parser.add_argument('--nameL', type=str, default="beltE57.tif",
+    parser.add_argument('--nameL', type=str, default="beltE59.tif",
                         help='Left image filename.')
     parser.add_argument('--nameR', type=str, default="beltE55.tif",
                         help='Right image filename.')
@@ -64,7 +64,8 @@ if __name__ == '__main__':
     rawL = cv2.imread(args.root_path+args.nameL)
     rawR = cv2.imread(args.root_path+args.nameR)  
     
-    dx, __ = bt.getBeltMotionByTemplateMatching(rawR, rawL) 
+    dx, __ = bt.getBeltMotionByTemplateMatching(rawR, rawL,  max_travel=100) 
+    print('Stereo Baseline = {}'.format(dx))
         
     imgL, imgR = stereo_utils.stereoPreprocess(rawL, rawR)
         
@@ -76,10 +77,15 @@ if __name__ == '__main__':
     #  compute disparity          
     dispL, __, __, __ = stereo_utils.findDisparity(ip.translateImg(imgL, (-dx, 0)), imgR, minDisp=minDisp, numDisp=numDisp)
  
-  
+    h,w = dispL.shape
+    offset = min([minDisp, 0])
+    dispL[:,w-dx+offset:w] = minDisp*16
     p = proportion_of_matched_pixels(dispL, minDisp, numDisp)
     print('Fraction of Matched Pixels = {0:0.2f}'.format(p))
   
+    #adjust disparity
+    dispL = dispL - (minDisp*16)
+    
     # display dispaity
     vis = np.clip(dispL, 0,255)
     vis = np.uint8(ip.rescale(vis, (0,255)))
@@ -89,4 +95,7 @@ if __name__ == '__main__':
           
     ch = cv2.waitKey(0)    
     cv2.destroyAllWindows()
+    
+    filename = temp_path+"dispL"+".jpg"
+    cv2.imwrite(filename, dispL)
         
