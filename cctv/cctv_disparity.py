@@ -21,7 +21,15 @@ minDisp = -1
 global numDisp
 numDisp = 16
 
-
+def proportion_of_matched_pixels(disp, minDisp, numDisp):
+    h, w = disp.shape
+    D = disp[:,numDisp+minDisp:max([minDisp+w, w])]
+    loc = np.where(D > (minDisp-1)*16)
+    
+    n_matched_pix = np.size(loc[0])
+    n_total_pix = D.size
+    
+    return n_matched_pix / n_total_pix
 
 def parse_args():
     
@@ -68,6 +76,10 @@ if __name__ == '__main__':
     #  compute disparity          
     dispL, __, __, __ = stereo_utils.findDisparity(ip.translateImg(imgL, (-dx, 0)), imgR, minDisp=minDisp, numDisp=numDisp)
  
+  
+    p = proportion_of_matched_pixels(dispL, minDisp, numDisp)
+    print('Fraction of Matched Pixels = {0:0.2f}'.format(p))
+  
     # display dispaity
     vis = np.clip(dispL, 0,255)
     vis = np.uint8(ip.rescale(vis, (0,255)))

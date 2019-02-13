@@ -66,6 +66,7 @@ def cluster(dxdy,k):
 
 def getBeltMotionByTemplateMatching(img0, img1, max_travel=50):
     """
+    13.02.19 - fixed bug.
     09.02.19
     getBeltMotionByTemplateMatching() - find fisheries CCTV belt motion
     input:
@@ -77,7 +78,7 @@ def getBeltMotionByTemplateMatching(img0, img1, max_travel=50):
     """
     import cv2
     
-    x,y = img0.shape[:2]
+    y,x = img0.shape[:2]
     f0 = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
     f1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     
