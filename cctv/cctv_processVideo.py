@@ -115,7 +115,7 @@ def process_video(video_filename, cal_filename,
             cv2.imshow('Stereo', out_frame)
             out.write(out_frame)
             
-            k = cv2.waitKey(1)             
+            k = cv2.waitKey(0)             
             if k == 27 or frame_i >= stop:
                 cap.release()
                 out.release()

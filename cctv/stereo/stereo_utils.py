@@ -39,7 +39,7 @@ def ground_truth(img, dx, template):
 #    return dx+delta_Best
         
 
-def stereoPreprocess(imgL, imgR, dx, alpha = 0.25, k = 3):
+def stereoPreprocess(imgL, imgR, alpha = 0.25, k = 3):
     """
     stereoPreprocess - Prepares images for stereo disparity
     Use Sobel kernel size = 3 for cctv, = 5 for hdtv 
@@ -232,7 +232,7 @@ def computeDisparity(imgL, imgR, dx, template, iFlag=True, debug=False):
     mask = ground_truth(imgL, dx, template)
 
 
-    imgL, imgR = stereoPreprocess(imgL, imgR, dx)
+    imgL, imgR = stereoPreprocess(imgL, imgR)
     
 #    if debug:
 #        cv2.imshow('preprocessedL', imgL)
