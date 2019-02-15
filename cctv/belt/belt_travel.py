@@ -66,6 +66,7 @@ def cluster(dxdy,k):
 
 def getBeltMotionByTemplateMatching(img0, img1, max_travel=50):
     """
+    15.02.19 - added sub-pixel estimation
     13.02.19 - fixed bug.
     09.02.19
     getBeltMotionByTemplateMatching() - find fisheries CCTV belt motion
@@ -90,8 +91,20 @@ def getBeltMotionByTemplateMatching(img0, img1, max_travel=50):
     res = cv2.matchTemplate(f1,template,cv2.TM_SQDIFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
     
-    dx = min_loc[0] - max_travel
+#    x = min_loc[0] - max_travel
     confidence = 1 - min_val
+    
+    # do subpixel quadratic interpolation:
+    # fit parabola into (x1=d-1, y1=Sp[d-1]), (x2=d, y2=Sp[d]), (x3=d+1, y3=Sp[d+1])
+    # then find minimum of the parabola.
+    x2 = min_loc[0]
+    y1, y2, y3 = (res[0,x2-1], res[0,x2], res[0,x2+1])
+    
+    denom2 = max(y1 + y3 - 2*y2, 1)
+    x = x2 - (y1 - y3 + denom2) / (denom2*2)
+    
+    dx = x - max_travel
+    
     
     return dx, confidence
     

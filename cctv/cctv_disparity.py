@@ -37,9 +37,9 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--root_path', type=str, default="../data/",
                         help='Root pathname.')
-    parser.add_argument('--frameL', type=int, default=58,
+    parser.add_argument('--frameL', type=int, default=62,
                         help='Left image filename.')
-    parser.add_argument('--frameR', type=int, default=55,
+    parser.add_argument('--frameR', type=int, default=56,
                         help='Right image filename.')
     args = parser.parse_args()
     
@@ -75,7 +75,7 @@ if __name__ == '__main__':
       dx, __ = bt.getBeltMotionByTemplateMatching(imgR, imgL) 
       baseline += dx
       
-    print('Stereo Baseline = {}'.format(baseline))  
+    print('Stereo Baseline = {0:0.2f}'.format(baseline))  
 
 
     
@@ -91,16 +91,19 @@ if __name__ == '__main__':
  
     h,w = dispL.shape
     offset = min([minDisp, 0])
-    dispL[:,w-baseline+offset:w] = minDisp*16
+    dispL[:,w-int(baseline)+offset:w] = minDisp*16
     p = proportion_of_matched_pixels(dispL, minDisp, numDisp)
     print('Fraction of Matched Pixels = {0:0.2f}'.format(p))
   
-    #adjust disparity
+    #set unmatched pixels to min disparity
+    dispL[np.where(dispL == (minDisp-1)*16)] = (minDisp*16)
+    # make disparity +ve
     dispL = dispL - (minDisp*16)
+    # print some stats
+    print('Max= {0:3d}; Min= {1:3d}; Mean= {2:3.2f}.'.format(np.max(dispL), np.min(dispL), np.mean(dispL)))
     
     # display dispaity
-    vis = np.clip(dispL, 0,255)
-    vis = np.uint8(ip.rescale(vis, (0,255)))
+    vis = np.uint8(dispL)
     vis_color = cv2.applyColorMap(vis, cv2.COLORMAP_JET)
     cv2.imshow('dispL', vis_color)
        

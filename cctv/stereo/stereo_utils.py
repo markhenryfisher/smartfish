@@ -61,8 +61,8 @@ def stereoPreprocess(imgL, imgR, alpha = 0.25, k = 3):
     # translate
     #imgL = ip.translateImg(imgL, (dx, 0))
     # prefilter
-    edgeL = np.uint8(np.clip(abs(cv2.Sobel(imgL,cv2.CV_64F,1,0,ksize=k)), 0,255))
-    edgeR = np.uint8(np.clip(abs(cv2.Sobel(imgR,cv2.CV_64F,1,0,ksize=k)), 0,255))
+    edgeL = np.uint8(ip.rescale(abs(cv2.Sobel(imgL,cv2.CV_64F,1,0,ksize=k)), (0,255)))
+    edgeR = np.uint8(ip.rescale(abs(cv2.Sobel(imgR,cv2.CV_64F,1,0,ksize=k)), (0,255)))
     # blend edges and raw
     imgL = np.uint8(ip.blend(edgeL, imgL, alpha))
     imgR = np.uint8(ip.blend(edgeR, imgR, alpha))
