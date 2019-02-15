@@ -56,11 +56,6 @@ def process_video(video_filename, cal_filename,
     buff = frame_buffer.FrameBuffer(buffSize, direction, temp_path)
     outvidfilename = None
     
-#    out1 = out2 = np.zeros(img_shape, dtype=np.ubyte)
-#    out1 = cv2.applyColorMap(out1, cv2.COLORMAP_JET)
-#    out2 = cv2.applyColorMap(out2, cv2.COLORMAP_JET)
-    
-    
     if start > 0:
         print('\nSpooling to Frame {}...'.format(start))
     frame_i = 0
@@ -115,7 +110,7 @@ def process_video(video_filename, cal_filename,
             cv2.imshow('Stereo', out_frame)
             out.write(out_frame)
             
-            k = cv2.waitKey(0)             
+            k = cv2.waitKey(250)             
             if k == 27 or frame_i >= stop:
                 cap.release()
                 out.release()
@@ -143,8 +138,7 @@ def parse_args():
                         help='template filename.')
     parser.add_argument('--cal_file', type=str, default="beltE/cameraParams.yml",
                         help='calibration filename.')
-    # try 73 start for problem
-    parser.add_argument('--start', type=int, default=50, help='Start at frame=start_idx')
+    parser.add_argument('--start', type=int, default=54, help='Start at frame=start_idx')
     parser.add_argument('--stop', type=int, default=500, help='Stop at frame=stop_idx')
     args = parser.parse_args()
     
@@ -166,7 +160,7 @@ if __name__ == '__main__':
     
     
     process_video(args.root_path+args.video_file, args.root_path+args.cal_file, 
-              buffSize = 7, 
+              buffSize = 6, 
               start = args.start, 
               stop = args.stop,
               direction = 'forwards',

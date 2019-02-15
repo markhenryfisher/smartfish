@@ -227,43 +227,20 @@ def computeDisparity(imgL, imgR, dx, template, iFlag=True, debug=False):
     import cv2
     import numpy as np
     from utils import image_plotting as ip
-    
-    
-    mask = ground_truth(imgL, dx, template)
-
 
     imgL, imgR = stereoPreprocess(imgL, imgR)
     
-#    if debug:
-#        cv2.imshow('preprocessedL', imgL)
-#        cv2.imshow('preprocessedR', imgR)
-#        cv2.waitKey(0)
-
-#    # 1st pass (find disparity of the belt):
-#    minDisp=-7
-#    numDisp=16
-#    testL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp, numDisp, alg='sgbm')
-#    ground0 = np.zeros_like(mask)
-#    loc = np.where( testL > ((minDisp-1)*16))
-#    ground0[loc] = 255
-#    loc = np.where( mask == 0)
-#    ground0[loc] = 0
-#
-##    cv2.imshow('mask', mask)   
-##    cv2.imshow('ground0', ground0)  
-##    cv2.waitKey(0)    
-#
-#    # apply a correction
-#    gd0_dx = np.mean(testL[ground0>0]) / 16.0 
-#    gd0_sd = np.std(testL[ground0>0]) / 16.0
-#    adj = gd0_dx + gd0_sd
-#    print('stats: %s %s %s' % (gd0_dx, gd0_sd, adj))
-##    minDisp = - int(round(adj))
     minDisp = -1
     numDisp=16
-    dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp, numDisp, alg='sgbm', iFlag=iFlag)
+#    dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp, numDisp, alg='sgbm', iFlag=iFlag)
        
-        
+    dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp=minDisp, numDisp=numDisp)
+    
+    h,w = dispL.shape
+    offset = min([minDisp, 0])
+    dispL[:,w-int(-dx)+offset:w] = minDisp*16
+    
+    
     # set unmatched pixels to minDisp
     dispL[np.where( dispL == ((minDisp-1)*16))] = minDisp*16
     # make all pixels +ve
@@ -344,7 +321,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         avDisp = sumDisp
     
     #rescaling set empirically: cctv = (0.02, 0.25) hdtv = (0, 0.12)
-    avDisp = np.uint8(ip.rescale(avDisp, (0,255), (0, 0.1)))
+    avDisp = np.uint8(ip.rescale(avDisp, (0,255), (0, 0.2)))
     avDisp[:,-int(dxMax):-1] = 0
     if buff.direction == 'backwards':
         avDisp = np.fliplr(avDisp)
