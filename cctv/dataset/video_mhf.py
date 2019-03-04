@@ -24,8 +24,12 @@ class Belt (object):
         self.__calib_cache_belt = {}
         self.__calib_cache_belt_realign = {}
         
-    def lens_calibration_path(self, camera_name):
+    def lens_calibration_path(self, camera_name): # temp fix
         return os.path.join(self.calib_dir, 'lens__camera_{}'.format(camera_name))
+    
+    def belt_calibration_path(self, camera_name, alignment_name):
+        return os.path.join(self.calib_dir, 'belt__camera_{}__align_{}.json'.format(camera_name, alignment_name))
+
     
     def get_lens_calibration(self, camera_name):
         key = camera_name
@@ -38,12 +42,27 @@ class Belt (object):
                 x = cal_utils.getCameraParams(path+'.yml') # temp fix
             elif os.path.exists(path+'.json'): 
                 from calibration import lens
-                with open(path, 'r') as f:
+                with open(path+'.json', 'r') as f:
                     calib_js = json.load(f)
                 x = lens.LensCalibration.from_json(calib_js)
             else:
                 raise RuntimeError('Could not find lens calibration file {} for camera {}'.format(path, camera_name))    
             self.__calib_cache_lens[key] = x
+            return x
+
+    def get_belt_calibration(self, camera_name, align_name):
+        key = camera_name, align_name
+        try:
+            return self.__calib_cache_belt[key]
+        except KeyError:
+            path = self.belt_calibration_path(camera_name, align_name)
+            if not os.path.exists(path):
+                raise RuntimeError('Could not find belt calibration file {} for camera {} alignment {}'.format(path, camera_name, align_name))
+            from calibration import belt
+            with open(path, 'r') as f:
+                calib_js = json.load(f)
+            x = belt.BeltCalibration.from_json(calib_js)
+            self.__calib_cache_belt[key] = x
             return x
 
         
@@ -66,9 +85,11 @@ class VideoLITE (object):
         self.filename = filename
         self.path = path 
         self.belt = belt
-        self.camera_name = "default" #None
+        self.camera_name = "Default" #None
+        self.align_name = "Default" #None
         
         self.__lens_calib = None
+        self.__belt_calib = None
         
     @property
     def lens_calibration(self):
@@ -78,7 +99,16 @@ class VideoLITE (object):
             self.__lens_calib = self.belt.get_lens_calibration(self.camera_name)
         return self.__lens_calib
         
-        
+    @property
+    def belt_calibration(self):
+        if self.__belt_calib is None:
+            if self.camera_name is None:
+                raise RuntimeError('Cannot get belt calibration for video {} as no camera name is registered; run the `register_calibration` program'.format(self.name))
+            if self.align_name is None:
+                raise RuntimeError('Cannot get belt calibration for video {} as no alignment name is registered; run the `register_calibration` program'.format(self.name))
+            self.__belt_calib = self.belt.get_belt_calibration(self.camera_name, self.align_name)
+        return self.__belt_calib     
+
 VIDEOS = []
 VIDEO_NAME_TO_VIDEO = {}
 filename = name = None

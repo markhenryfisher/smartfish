@@ -66,6 +66,9 @@ def process_video(video_name,
         pass
     else:
         x, y, w, h = lens_calib.roi # it's Geoff's
+        belt_calib = video.belt_calibration
+        mapping_x, mapping_y = belt_calib.lens_distort_rectilinear_mapping(lens_calib, img_shape)
+
 
     buff = frame_buffer.FrameBuffer(buffSize, direction, temp_path)
     outvidfilename = None
@@ -84,11 +87,15 @@ def process_video(video_name,
             while buff.count < buff.size:
                 success, img = cap.read()
                 if not success:
-                    raise ValueError('Failed to read video frame')
-                if lens_calib is None:
-                    pass
-                else:
+                    raise RuntimeError('Failed to read video frame')
+                if type(lens_calib).__name__ == 'Bunch': # its mhf's 
                     dst = cal_utils.rectify(img, lens_calib)
+                else:    # Geoff's
+                    dst = cv2.remap(img, mapping_x, mapping_y, cv2.INTER_LINEAR)
+                    if belt_calib is None:
+                        # No belt calibration - crop
+                        dst = dst[y:y+h, x:x+w]
+                        
                 buff.push(img, dst)
             
             print('Frame {}'.format(frame_i))
@@ -173,8 +180,10 @@ if __name__ == '__main__':
         if os.path.isdir(temp_path):
             pass
     
+    video_name = args.video_name
+    video_name = 'vlc-record-2018-05-30-14h32m23s-ABSENT-ABSENT-180122_141435-C4H-141-180204_085409_188.MP4-'
     
-    process_video(args.video_name, 
+    process_video(video_name, 
               buffSize = 6, 
               start = args.start, 
               stop = args.stop,
