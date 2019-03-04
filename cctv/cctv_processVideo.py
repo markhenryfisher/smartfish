@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+01.03.19 - added support for both json and yml calibration files. If calibration file is specified then 
+            we use MHF's recification code, otherwise Geoff's.
 11.02.19 - added 'reset' feature to frame buffer.
 09.02.19 - replaced getBeltTravelByOpticalFlow() with getBeltTravelByTemplateMatching()
             Note: Also adopted convention that belt distance is +ve for left to right travel
@@ -23,12 +25,13 @@ Script to test cctv video input, FrameBuffer, Disparity
 
 import os
 global minViableStereoBaseline
-minViableStereoBaseline = 70      
-        
-def process_video(video_filename, cal_filename, 
+minViableStereoBaseline = 70
+      
+def process_video(video_name, 
                   buffSize = 5, start = 0, stop = 1000, direction = 'backwards', 
                   iFlag = False, debug = False, temp_path = './'):
     
+    from dataset import video_mhf
     from utils import frame_buffer
     from utils import cal_utils
     from stereo import stereo_utils
@@ -38,12 +41,16 @@ def process_video(video_filename, cal_filename,
     from common import draw_str
     import cv2
     import numpy as np
+
+    if video_name not in video_mhf.VIDEO_NAME_TO_VIDEO:
+        print('Could not find video named {}'.format(video_name))
+        return
     
-    cameraParams = cal_utils.getCameraParams(cal_filename)
-  
-    cap = cv2.VideoCapture(video_filename)
+    video = video_mhf.VIDEO_NAME_TO_VIDEO[video_name]
+    
+    cap = cv2.VideoCapture(video.path)
     if not cap.isOpened():
-        print('Could not read video file {}'.format(video_filename))
+        print('Could not read video file {}'.format(video.path))
         return
     
     # Print the frame rate, number of frames and resolution
@@ -52,6 +59,13 @@ def process_video(video_filename, cal_filename,
     img_shape = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
     print('Frame rate: {}, num frames: {}, shape: {}'.format(fps, num_frames, img_shape))
+
+    # Load lens calibration (in this case lens & beltROI)
+    lens_calib = video.lens_calibration
+    if type(lens_calib).__name__ == 'Bunch': # its mhf's 
+        pass
+    else:
+        x, y, w, h = lens_calib.roi # it's Geoff's
 
     buff = frame_buffer.FrameBuffer(buffSize, direction, temp_path)
     outvidfilename = None
@@ -71,8 +85,10 @@ def process_video(video_filename, cal_filename,
                 success, img = cap.read()
                 if not success:
                     raise ValueError('Failed to read video frame')
-
-                dst = cal_utils.rectify(img, cameraParams)
+                if lens_calib is None:
+                    pass
+                else:
+                    dst = cal_utils.rectify(img, lens_calib)
                 buff.push(img, dst)
             
             print('Frame {}'.format(frame_i))
@@ -132,10 +148,9 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--root_path', type=str, default="../data/",
                         help='Root pathname.')
-    parser.add_argument('--video_file', type=str, default="Belt E base.mp4",
-                        help='video filename.')
-    parser.add_argument('--template_file', type=str, default="template.tif",
-                        help='template filename.')
+    parser.add_argument('--video_name', type=str, default="Belt E base",
+                        help='video name.')
+#    'vlc-record-2018-05-30-14h32m23s-ABSENT-ABSENT-180122_141435-C4H-141-180204_085409_188.MP4-'
     parser.add_argument('--cal_file', type=str, default="beltE/cameraParams.yml",
                         help='calibration filename.')
     parser.add_argument('--start', type=int, default=54, help='Start at frame=start_idx')
@@ -159,7 +174,7 @@ if __name__ == '__main__':
             pass
     
     
-    process_video(args.root_path+args.video_file, args.root_path+args.cal_file, 
+    process_video(args.video_name, 
               buffSize = 6, 
               start = args.start, 
               stop = args.stop,
