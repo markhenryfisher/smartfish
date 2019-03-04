@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+04.03.19 - now writing all results and debug to C:\fish\data... video output filename is
+            auto generated using datetime. 
 01.03.19 - added support for both json and yml calibration files. If calibration file is specified then 
             we use MHF's recification code, otherwise Geoff's.
 11.02.19 - added 'reset' feature to frame buffer.
@@ -28,8 +30,8 @@ global minViableStereoBaseline
 minViableStereoBaseline = 70
       
 def process_video(video_name, 
-                  buffSize = 5, start = 0, stop = 1000, direction = 'backwards', 
-                  iFlag = False, debug = False, temp_path = './'):
+                  buffSize = 5, start = 0, stop = 1000, direction = 'forwards', 
+                  iFlag = False, debug = False):
     
     from dataset import video_mhf
     from utils import frame_buffer
@@ -41,6 +43,7 @@ def process_video(video_name,
     from common import draw_str
     import cv2
     import numpy as np
+    import datetime
 
     if video_name not in video_mhf.VIDEO_NAME_TO_VIDEO:
         print('Could not find video named {}'.format(video_name))
@@ -70,7 +73,7 @@ def process_video(video_name,
         mapping_x, mapping_y = belt_calib.lens_distort_rectilinear_mapping(lens_calib, img_shape)
 
 
-    buff = frame_buffer.FrameBuffer(buffSize, direction, temp_path)
+    buff = frame_buffer.FrameBuffer(buffSize, direction, video.belt.debug_dir)
     outvidfilename = None
     
     if start > 0:
@@ -107,7 +110,7 @@ def process_video(video_name,
             if x == 0:
                 out1 = out2 = cv2.applyColorMap(np.zeros(img_shape, dtype=np.ubyte), cv2.COLORMAP_JET)
             elif buff.getLargestStereoBaseline() > minViableStereoBaseline:
-                out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, temp_path)
+                out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, video.belt.debug_dir)
             else:
                 out1 = ip.translateImg(out1, (buff.getLastdx(), 0))
                 out2 = ip.translateImg(out2, (buff.getLastdx(), 0))
@@ -127,7 +130,7 @@ def process_video(video_name,
 
             if outvidfilename is None:
                 frame_height, frame_width = out_frame.shape[:2]
-                outvidfilename = temp_path+'outpy.avi'
+                outvidfilename = os.path.join(video.belt.results_dir, datetime.datetime.now().strftime("%Y%m%d-%H%M%S")+'.avi')
                 out = cv2.VideoWriter(outvidfilename,cv2.VideoWriter_fourcc('M','J','P','G'), 5, (frame_width,frame_height))
 
             cv2.imshow('Stereo', out_frame)
@@ -153,13 +156,8 @@ def parse_args():
     
     parser = argparse.ArgumentParser(description='process video to find stereo disparity',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--root_path', type=str, default="../data/",
-                        help='Root pathname.')
     parser.add_argument('--video_name', type=str, default="Belt E base",
                         help='video name.')
-#    'vlc-record-2018-05-30-14h32m23s-ABSENT-ABSENT-180122_141435-C4H-141-180204_085409_188.MP4-'
-    parser.add_argument('--cal_file', type=str, default="beltE/cameraParams.yml",
-                        help='calibration filename.')
     parser.add_argument('--start', type=int, default=54, help='Start at frame=start_idx')
     parser.add_argument('--stop', type=int, default=500, help='Stop at frame=stop_idx')
     args = parser.parse_args()
@@ -170,18 +168,9 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
-
-    
-    # creates a temporary directory to save data generated at runtime
-    temp_path = args.root_path+'temp/'
-    try:
-        os.makedirs(temp_path)
-    except OSError:
-        if os.path.isdir(temp_path):
-            pass
     
     video_name = args.video_name
-    video_name = 'vlc-record-2018-05-30-14h32m23s-ABSENT-ABSENT-180122_141435-C4H-141-180204_085409_188.MP4-'
+#    video_name = 'vlc-record-2018-05-30-14h32m23s-ABSENT-ABSENT-180122_141435-C4H-141-180204_085409_188.MP4-'
     
     process_video(video_name, 
               buffSize = 6, 
@@ -189,8 +178,7 @@ if __name__ == '__main__':
               stop = args.stop,
               direction = 'forwards',
               iFlag = False,
-              debug = True,
-              temp_path = temp_path)
+              debug = True)
     
     
     

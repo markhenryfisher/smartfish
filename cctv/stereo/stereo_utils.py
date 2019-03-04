@@ -264,6 +264,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     import sys
     sys.path.append('C:/Users/Mark/opencv-master/samples/python')
     from common import draw_str
+    import os
     
     threshold = 20
     imgRef = buff.data[-1]
@@ -296,9 +297,9 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             if debug:
                 print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
                 #print('this_dx= %s' % this_dx )
-                filename = temp_path+"imgR"+str(count)+".jpg"
+                filename = os.path.join(temp_path, "imgR"+str(count)+".jpg")
                 cv2.imwrite(filename, imgR)
-                filename = temp_path+"imgL"+str(count)+".jpg"
+                filename = os.path.join(temp_path, "imgL"+str(count)+".jpg")
                 cv2.imwrite(filename, imgL)                                
             if abs(dx)>threshold: #and this_dx>20:
                 print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
@@ -343,7 +344,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         # write results to file
 #        filename = temp_path+"Sum"+str(count)+".jpg"
 #        cv2.imwrite(filename, vis_sum)
-        filename = temp_path+"Mean"+str(count)+".jpg"
+        filename = os.path.join(temp_path, "Mean"+str(count)+".jpg")
         cv2.imwrite(filename, out2)
         
         # display results on screen

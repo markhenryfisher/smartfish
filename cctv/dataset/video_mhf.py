@@ -24,6 +24,14 @@ class Belt (object):
         self.__calib_cache_belt = {}
         self.__calib_cache_belt_realign = {}
         
+        # Results
+        self.results_dir = mhf_settings.ensure_dir_exists(
+            os.path.join(mhf_settings.RESULTS_DIR, self.name))
+        
+        # Debug
+        self.debug_dir = mhf_settings.ensure_dir_exists(
+            os.path.join(mhf_settings.DEBUG_DIR, self.name))
+        
     def lens_calibration_path(self, camera_name): # temp fix
         return os.path.join(self.calib_dir, 'lens__camera_{}'.format(camera_name))
     

@@ -49,3 +49,4 @@ def ensure_dir_exists(path):
 CALIBRATION_DIR = ensure_dir_exists(os.path.join(DATA_PATH, 'calibration'))
 VIDEO_DIR = ensure_dir_exists(os.path.join(DATA_PATH, 'CCTV-VIDEO'))
 RESULTS_DIR = ensure_dir_exists(os.path.join(DATA_PATH, 'results'))
+DEBUG_DIR = ensure_dir_exists(os.path.join(DATA_PATH, 'debug'))
