@@ -8,11 +8,11 @@ Created on Fri Mar  1 19:54:30 2019
 import os
 
 _DATA_PATHS = [
-    r'C:\fish\data\fish2014mhf', # mhf fix
+    r'C:\fish\data\fish2018stereo', # mhf fix
 ]
 
 _SCRATCH_PATHS = [
-    r'C:\scratch\data\fish2014mhf', # mhf fix
+    r'C:\scratch\data\fish2018stereo', # mhf fix
 ]
 
 DATA_PATH = None
