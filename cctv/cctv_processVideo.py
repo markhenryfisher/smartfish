@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+06.03.19 - branch @revision 31
 04.03.19 - now writing all results and debug to C:\fish\data... video output filename is
             auto generated using datetime. 
 01.03.19 - added support for both json and yml calibration files. If calibration file is specified then 
@@ -27,7 +28,8 @@ Script to test cctv video input, FrameBuffer, Disparity
 
 import os
 global minViableStereoBaseline
-minViableStereoBaseline = 70
+minViableStereoBaseline_vga = 70
+minViableStereoBaseline_hd = 30
       
 def process_video(video_name, 
                   buffSize = 5, start = 0, stop = 1000, direction = 'forwards', 
@@ -57,11 +59,13 @@ def process_video(video_name,
         return
     
     # Print the frame rate, number of frames and resolution
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    img_shape = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    video.fps = cap.get(cv2.CAP_PROP_FPS)
+    video.num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    video.img_shape = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
-    print('Frame rate: {}, num frames: {}, shape: {}'.format(fps, num_frames, img_shape))
+    print('Frame rate: {}, num frames: {}, shape: {}'.format(video.fps, video.num_frames, video.img_shape))
+
+    
 
     # Load lens calibration (in this case lens & beltROI)
     lens_calib = video.lens_calibration
@@ -70,10 +74,10 @@ def process_video(video_name,
     else:
         x, y, w, h = lens_calib.roi # it's Geoff's
         belt_calib = video.belt_calibration
-        mapping_x, mapping_y = belt_calib.lens_distort_rectilinear_mapping(lens_calib, img_shape)
+        mapping_x, mapping_y = belt_calib.lens_distort_rectilinear_mapping(lens_calib, video.img_shape)
 
 
-    buff = frame_buffer.FrameBuffer(buffSize, direction, video.belt.debug_dir)
+    buff = frame_buffer.FrameBuffer(buffSize, direction, video.img_shape)
     outvidfilename = None
     
     if start > 0:
@@ -107,9 +111,9 @@ def process_video(video_name,
             x = buff.x[-1]
             
             # compute disparity if sufficient stereo baseline
-            if x == 0:
-                out1 = out2 = cv2.applyColorMap(np.zeros(img_shape, dtype=np.ubyte), cv2.COLORMAP_JET)
-            elif buff.getLargestStereoBaseline() > minViableStereoBaseline:
+            if x == 0 and frame_i > start:
+                out1 = out2 = cv2.applyColorMap(np.zeros(video.img_shape, dtype=np.ubyte), cv2.COLORMAP_JET)
+            elif buff.sufficientStereoBaseline:
                 out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, video.belt.debug_dir)
             else:
                 out1 = ip.translateImg(out1, (buff.getLastdx(), 0))
@@ -136,7 +140,7 @@ def process_video(video_name,
             cv2.imshow('Stereo', out_frame)
             out.write(out_frame)
             
-            k = cv2.waitKey(250)             
+            k = cv2.waitKey(0)   #250          
             if k == 27 or frame_i >= stop:
                 cap.release()
                 out.release()
@@ -148,8 +152,6 @@ def process_video(video_name,
 
     cv2.destroyAllWindows()
     
-
-
     
 def parse_args():
     import argparse
@@ -158,7 +160,7 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--video_name', type=str, default="Belt E base",
                         help='video name.')
-    parser.add_argument('--start', type=int, default=54, help='Start at frame=start_idx')
+    parser.add_argument('--start', type=int, default=55, help='Start at frame=start_idx')
     parser.add_argument('--stop', type=int, default=500, help='Stop at frame=stop_idx')
     args = parser.parse_args()
     
@@ -170,13 +172,13 @@ if __name__ == '__main__':
     args = parse_args()
     
     video_name = args.video_name
-#    video_name = 'vlc-record-2018-05-30-14h32m23s-ABSENT-ABSENT-180122_141435-C4H-141-180204_085409_188.MP4-'
+    video_name = 'vlc-record-2018-05-30-14h32m23s-ABSENT-ABSENT-180122_141435-C4H-141-180204_085409_188.MP4-'
     
     process_video(video_name, 
               buffSize = 6, 
               start = args.start, 
               stop = args.stop,
-              direction = 'forwards',
+              direction = 'backwards',
               iFlag = False,
               debug = True)
     

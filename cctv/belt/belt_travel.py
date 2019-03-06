@@ -78,7 +78,7 @@ def getBeltMotionByTemplateMatching(img0, img1, max_travel=50):
         confidence - confidence in estimate (0.0 - 1.0) 
     """
     import cv2
-    
+      
     y,x = img0.shape[:2]
     f0 = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
     f1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)

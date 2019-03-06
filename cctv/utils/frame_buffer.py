@@ -13,8 +13,10 @@ import cv2
 
 
 class FrameBuffer:
+    vga_shape = (480, 640)
+    hd_shape = (800, 1280)
     
-    def __init__(self, s, d, path):
+    def __init__(self, s, d, img_shape):
         self.size = s
         self.raw = []
         self.data = []
@@ -22,7 +24,8 @@ class FrameBuffer:
         self.count = 0
         self.comb = self.__disp_comb()
         self.direction = d
-        self.template = cv2.imread(path+'template.tif', cv2.IMREAD_GRAYSCALE)
+#        self.template = cv2.imread(path+'template.tif', cv2.IMREAD_GRAYSCALE)
+        self.minViableStereoBaseline = self.__viable_stereo_baseline(img_shape)
         
     def __reset(self, r, f):
         """
@@ -45,23 +48,27 @@ class FrameBuffer:
                 n += 1                
         return n
     
+    def __viable_stereo_baseline(self,shape):
+        """
+        baseline - set value according to img_size
+        """
+        if  shape == self.vga_shape:
+            x = 70.0
+        elif shape == self.hd_shape:
+            x = 30.0
+        else:
+            raise RuntimeError('Unknown video resolution')
+            
+        return x
+    
     def __check_motion(self,f0,f1):
-#        dx = bt.getBeltMotionByOpticalFlow(f0, f1, self.template)
-#        
-#        dx = np.array(dx)
-#        
-##        print(dx)
-#            
-#        if len(dx) == 0:
-#            print('Warning: No Features to Track!!!')
-#            dx = 0    
-#        else:         
-#            dx = np.mean(dx)
         err = False    
         dx, conf = bt.getBeltMotionByTemplateMatching(f0, f1)
-        if conf < 0.9 or dx < 0:
+        if conf < 0.9:
             err = True
-            
+        if (self.direction == 'forwards' and dx < 0) or (self.direction == 'backwards' and dx > 0):
+            err = True
+
         return dx, err
                 
         
@@ -85,7 +92,7 @@ class FrameBuffer:
                 self.x.insert(0, x)
                 self.count += 1
             else:
-                raise Exception('FrameBuffer: Buff Full!')
+                raise RuntimeError('FrameBuffer: Buff Full!')
         
     
     def getLargestStereoBaseline(self):
@@ -100,3 +107,7 @@ class FrameBuffer:
         
     def nItems(self):
         return self.count
+    
+    @property
+    def sufficientStereoBaseline(self):
+        return self.getLargestStereoBaseline() > self.minViableStereoBaseline

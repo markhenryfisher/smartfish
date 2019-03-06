@@ -95,6 +95,10 @@ class VideoLITE (object):
         self.belt = belt
         self.camera_name = "Default" #None
         self.align_name = "Default" #None
+    
+        self.fps = None
+        self.num_frames = None
+        self.img_shape = None
         
         self.__lens_calib = None
         self.__belt_calib = None

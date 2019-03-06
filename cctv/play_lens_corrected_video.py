@@ -57,7 +57,7 @@ def play_video(video_name, lens_only):
 
         sys.stdout.write('\rFrame {}'.format(frame_i))
 
-        k = cv2.waitKey(1)
+        k = cv2.waitKey(0) #1
         if k == 27:
             break
 

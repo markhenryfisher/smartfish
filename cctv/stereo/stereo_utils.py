@@ -220,7 +220,7 @@ def findDisparity(imgL, imgR, minDisp=0, numDisp=16, alg='sgbm', fFlag=False, iF
     return dispL, dispR, wlsL, wlsConf
 
 
-def computeDisparity(imgL, imgR, dx, template, iFlag=True, debug=False):
+def computeDisparity(imgL, imgR, dx, iFlag=True, debug=False):
     """
     computeDisparity - run cctv stereo processing pipeline
     """
@@ -303,7 +303,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
                 cv2.imwrite(filename, imgL)                                
             if abs(dx)>threshold: #and this_dx>20:
                 print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-                disp = computeDisparity(imgL, imgR, dx, buff.template, iFlag, debug)
+                disp = computeDisparity(imgL, imgR, dx, iFlag, debug)
 #                if debug:
 #                    vis = np.uint8(ip.rescale(disp, (0,255)))
 #                    vis_color = cv2.applyColorMap(vis, cv2.COLORMAP_JET)
