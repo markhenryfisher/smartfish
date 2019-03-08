@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+Misc Utils for SGBM Stereo
 
-This is a temporary script file.
+@author MHF
 """
 def ground_truth(img, dx, template):
     """
@@ -21,25 +21,9 @@ def ground_truth(img, dx, template):
 #    cv2.imshow('mask', mask)
 #    cv2.waitKey(0)
     
-    return mask
+    return mask       
 
-#def tweek(imgL, imgR, dx):
-#    from utils import image_plotting as ip
-#    from skimage.measure import compare_ssim as ssim
-#    
-#    delta_Best = 0
-#    sMax = 0
-#    for delta in range (-5, +5):
-#        tempL = ip.translateImg(imgL, (dx+delta, 0))
-#        s = ssim(imgR, tempL, multichannel=True)
-#        if s > sMax:
-#            sMax = s
-#            delta_Best = delta
-#        
-#    return dx+delta_Best
-        
-
-def stereoPreprocess(imgL, imgR, alpha = 0.25, k = 3):
+def stereoPreprocess(imgL, imgR, alpha = 0.25, k = 3): 
     """
     stereoPreprocess - Prepares images for stereo disparity
     Use Sobel kernel size = 3 for cctv, = 5 for hdtv 
@@ -54,12 +38,6 @@ def stereoPreprocess(imgL, imgR, alpha = 0.25, k = 3):
     imgL = cv2.equalizeHist(imgL)
     imgR = cv2.equalizeHist(imgR)
     
-    # make dx a conservative estimate so we should always find a match  
-#    dx = tweek(imgL, imgR, int(dx))
-#    dx = dx
-#    print('Tweeked dx = %s' % dx)
-    # translate
-    #imgL = ip.translateImg(imgL, (dx, 0))
     # prefilter
     edgeL = np.uint8(ip.rescale(abs(cv2.Sobel(imgL,cv2.CV_64F,1,0,ksize=k)), (0,255)))
     edgeR = np.uint8(ip.rescale(abs(cv2.Sobel(imgR,cv2.CV_64F,1,0,ksize=k)), (0,255)))
@@ -92,25 +70,15 @@ def getDispRange(dx):
     
     return minDisp, numDisp
 
-def sgbmDisparity(imgL, imgR, minDisp=0, numDisp= 16, fFlag=False, tFlag=False):
+def sgbmDisparity(imgL, imgR, params, minDisp=0, numDisp= 16, fFlag=False):
     """
     sgbmDisparity - compute disparity using semi-global block matching
     Note: Set fFlag to filter output with weighted least squares 
     """
     import cv2
      
-    windowSize = 15
-    
-#    if tFlag:
-#        minDisp = -7
-#        numDisp = 16
-#    else:
-#        minDisp, numDisp = getDispRange(dx)
-
- 
-#    print('sgbm disparity, dx= ', dx)
-#    print('minDisp: %s, numDisp: %s, windowSize: %s' % (minDisp,numDisp, windowSize))
-    
+    __, windowSize, p1, p2 = params
+        
     if (numDisp<=0 or numDisp%16!=0):
         raise NameError('Incorrect max_disparity value: it should be positive and divisible by 16')
 
@@ -120,13 +88,13 @@ def sgbmDisparity(imgL, imgR, minDisp=0, numDisp= 16, fFlag=False, tFlag=False):
     stereoL = cv2.StereoSGBM_create(minDisparity = minDisp,
         numDisparities = numDisp,
         blockSize = windowSize,
-        P1 = 2*1*windowSize**2,
-        P2 = 8*1*windowSize**2,
+        P1 = p1,
+        P2 = p2,
         disp12MaxDiff = 1,
 #        preFilterCap = 63,
-        uniquenessRatio = 5,
-#        speckleWindowSize = 25,
-#        speckleRange = 20,
+        uniquenessRatio = 5, 
+#        speckleWindowSize = 512,
+#        speckleRange = 128,
         mode = cv2.STEREO_SGBM_MODE_HH
     )    
     stereoR = cv2.ximgproc.createRightMatcher(stereoL)
@@ -174,16 +142,7 @@ def bmDisparity(imgL, imgR, dx=0):
         raise NameError('Incorrect window_size value: it should be positive and odd')
 
     stereoL = cv2.StereoBM_create(numDisp,windowSize)
-    stereoL.setMinDisparity(minDisp)
-
-    
-#    stereoL.setPreFilterType(cv2.STEREO_BM_PREFILTER_XSOBEL)
-#    stereoL.setPreFilterCap(7)
-#    stereoL.setPreFilterSize(15)
-#    stereoL.setDisp12MaxDiff(7)
-#    stereoL.setSpeckleWindowSize(50)
-#    stereoL.setSpeckleRange(5)
-#    
+    stereoL.setMinDisparity(minDisp) 
     
     stereoR = cv2.ximgproc.createRightMatcher(stereoL)
     
@@ -193,16 +152,19 @@ def bmDisparity(imgL, imgR, dx=0):
     # return raw disparity
     return dispL, dispR
 
-def findDisparity(imgL, imgR, minDisp=0, numDisp=16, alg='sgbm', fFlag=False, iFlag=False):
+def findDisparity(imgL, imgR, params, minDisp=0, numDisp=16, fFlag=False, iFlag=False):
     """
     cctvDisparity - computes disparity
     """
     import numpy as np
     
+    # unpack params
+    alg, __, __, __ = params
     wlsL = wlsConf = None
 
+
     if alg=='sgbm':
-        dispL, dispR, wlsL, wlsConf = sgbmDisparity(imgL, imgR, minDisp, numDisp, fFlag=fFlag)
+        dispL, dispR, wlsL, wlsConf = sgbmDisparity(imgL, imgR, params, minDisp, numDisp, fFlag=fFlag)
         
     elif alg=='bm':
         dispL, dispR = bmDisparity(imgL, imgR)
@@ -220,7 +182,7 @@ def findDisparity(imgL, imgR, minDisp=0, numDisp=16, alg='sgbm', fFlag=False, iF
     return dispL, dispR, wlsL, wlsConf
 
 
-def computeDisparity(imgL, imgR, dx, iFlag=True, debug=False):
+def computeDisparity(imgL, imgR, dx, params, iFlag=True, debug=False):
     """
     computeDisparity - run cctv stereo processing pipeline
     """
@@ -234,7 +196,7 @@ def computeDisparity(imgL, imgR, dx, iFlag=True, debug=False):
     numDisp=16
 #    dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp, numDisp, alg='sgbm', iFlag=iFlag)
        
-    dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp=minDisp, numDisp=numDisp)
+    dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, params, minDisp=minDisp, numDisp=numDisp)
     
     h,w = dispL.shape
     offset = min([minDisp, 0])
@@ -245,9 +207,8 @@ def computeDisparity(imgL, imgR, dx, iFlag=True, debug=False):
     dispL[np.where( dispL == ((minDisp-1)*16))] = minDisp*16
     # make all pixels +ve
     dispL = dispL - (minDisp*16)
-
+    
     # normalise disparity
-    #out = ( dispL/16.0 + dx_ ) / dx 
     weight_factor = 1 / (abs(dx) + 1)
     out = ( dispL / 16.0 ) * weight_factor
      
@@ -262,11 +223,13 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     import cv2
     from utils import image_plotting as ip
     import sys
-    sys.path.append('C:/Users/Mark/opencv-master/samples/python')
-    from common import draw_str
     import os
     
-    threshold = 20
+    if buff.belt_name == 'MRV SCOTIA': # belt has no texture
+        params = ('sgbm', 15, 8*3*15**2, 32*3*15**2)
+    else:
+        params = ('sgbm', 15, 2*1*15**2, 8*1*15**2)
+    threshold = buff.minViableStereoBaseline / (buff.size + 1)
     imgRef = buff.data[-1]
     h, w = imgRef.shape[:2]
     #z_buff = np.zeros((h,w,buff.comb))
@@ -279,7 +242,6 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             imgR = buff.data[i]
             imgL = buff.data[j]
             # stereo baseline
-##            dx = buff.x[j] - buff.x[i]
             dx = buff.x[i] - buff.x[j]
             
             # we assume belt moves left-to-right
@@ -288,22 +250,18 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
                 imgL = np.flip(imgL,axis=1)
                 dx = -dx
             
-            # incremental motion
-            #this_dx = abs(buff.x[j] - buff.x[j+1])
             # reference translation
-##            tdx = abs(np.int(np.round(buff.x[i] - buff.x[-1])))
             tdx = abs(np.int(np.round(buff.x[-1] - buff.x[i])))
-#            dx = abs(dx) 
+
             if debug:
                 print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-                #print('this_dx= %s' % this_dx )
                 filename = os.path.join(temp_path, "imgR"+str(count)+".jpg")
                 cv2.imwrite(filename, imgR)
                 filename = os.path.join(temp_path, "imgL"+str(count)+".jpg")
                 cv2.imwrite(filename, imgL)                                
-            if abs(dx)>threshold: #and this_dx>20:
+            if abs(dx)>threshold: 
                 print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-                disp = computeDisparity(imgL, imgR, dx, iFlag, debug)
+                disp = computeDisparity(imgL, imgR, dx, params, iFlag, debug)
 #                if debug:
 #                    vis = np.uint8(ip.rescale(disp, (0,255)))
 #                    vis_color = cv2.applyColorMap(vis, cv2.COLORMAP_JET)
@@ -313,8 +271,6 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
                 sumDisp = sumDisp + disp 
                 n += 1
                 
-#    if debug:
-#        cv2.destroyWindow('sumDisp')
     # average disparity
     if n>0:
         avDisp = sumDisp / n
@@ -330,29 +286,9 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     out1 = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET)   
     out2 = ip.overlay(imgRef, avDisp)
     
-    
-#    glyph = ip.highlight(imgRef, avDisp)
-#    cv2.imshow('anaglyph', glyph)
-    
-#    sumDisp = np.uint8(cctv.rescale(sumDisp, (0,255)))
-#    sumDisp[:,-int(dxMax):-1] = 0
-#    vis_color = cv2.applyColorMap(sumDisp, cv2.COLORMAP_JET)
-#    vis_sum = cctv.imfuse(imgRef, vis_color, 0.2)
-#    draw_str(vis_sum, (20, 20), frametxt)
-    
     if debug:
         # write results to file
-#        filename = temp_path+"Sum"+str(count)+".jpg"
-#        cv2.imwrite(filename, vis_sum)
         filename = os.path.join(temp_path, "Mean"+str(count)+".jpg")
         cv2.imwrite(filename, out2)
-        
-        # display results on screen
-#        cv2.imshow('Sum'+str(count), cv2.applyColorMap(sumDisp, cv2.COLORMAP_JET))
-#        cv2.imshow('Mean'+str(count), cv2.applyColorMap(avDisp, cv2.COLORMAP_JET))
-#        
-#        cv2.waitKey(0)
-##        cv2.destroyWindow('Sum'+str(count))
-#        cv2.destroyWindow('Mean'+str(count))
          
     return out1, out2

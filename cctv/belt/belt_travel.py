@@ -64,8 +64,9 @@ def cluster(dxdy,k):
     
     return kmeans.cluster_centers_
 
-def getBeltMotionByTemplateMatching(img0, img1, max_travel=50):
+def getBeltMotionByTemplateMatching(belt_name, img0, img1, max_travel=50):
     """
+    08.03.19 - corrected error in sub-pixel estimation 
     15.02.19 - added sub-pixel estimation
     13.02.19 - fixed bug.
     09.02.19
@@ -78,6 +79,18 @@ def getBeltMotionByTemplateMatching(img0, img1, max_travel=50):
         confidence - confidence in estimate (0.0 - 1.0) 
     """
     import cv2
+    
+    def calcParabolaVertex(x1, y1, x2, y2, x3, y3):
+        denom = (x1 - x2) * (x1 - x3) * (x2 - x3)
+        A = (x3 * (y2 - y1) + x2 * (y1 - y3) + x1 * (y3 - y2)) / denom
+        B = (x3*x3 * (y1 - y2) + x2*x2 * (y3 - y1) + x1*x1 * (y2 - y3)) / denom
+        C = (x2 * x3 * (x2 - x3) * y1 + x3 * x1 * (x3 - x1) * y2 + x1 * x2 * (x1 - x2) * y3) / denom;
+
+        xv = -B / (2*A)
+        yv = C - B*B / (4*A)
+        
+        return xv, yv
+
       
     y,x = img0.shape[:2]
     f0 = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
@@ -85,26 +98,29 @@ def getBeltMotionByTemplateMatching(img0, img1, max_travel=50):
     
     startx = max_travel
     stopx = x-max_travel
-    template = f0[:,startx:stopx]
+    if belt_name == 'HARVESTER':
+        template = f0[:,startx:stopx]
+    elif belt_name == 'MRV SCOTIA':
+        template = f0[445:-1, startx:stopx]
+    else:
+        raise RuntimeError('Unknown belt')
     
     # Apply template Matching
     res = cv2.matchTemplate(f1,template,cv2.TM_SQDIFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
     
-#    x = min_loc[0] - max_travel
     confidence = 1 - min_val
     
     # do subpixel quadratic interpolation:
-    # fit parabola into (x1=d-1, y1=Sp[d-1]), (x2=d, y2=Sp[d]), (x3=d+1, y3=Sp[d+1])
+    # fit parabola into (x1,y1, x2,y2, x3,y3)
     # then find minimum of the parabola.
-    x2 = min_loc[0]
-    y1, y2, y3 = (res[0,x2-1], res[0,x2], res[0,x2+1])
+    # https://stackoverflow.com/questions/717762/how-to-calculate-the-vertex-of-a-parabola-given-three-points
     
-    denom2 = max(y1 + y3 - 2*y2, 1)
-    x = x2 - (y1 - y3 + denom2) / (denom2*2)
+    x1, x2, x3 = (min_loc[0]-1, min_loc[0], min_loc[0]+1)
+    y1, y2, y3 = (res[min_loc[1],x1], res[min_loc[1],x2], res[min_loc[1],x3])
+    xv, yv = calcParabolaVertex(x1,y1,x2,y2,x3,y3)
     
-    dx = x - max_travel
-    
+    dx = xv - max_travel
     
     return dx, confidence
     

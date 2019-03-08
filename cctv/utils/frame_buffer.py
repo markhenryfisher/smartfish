@@ -16,7 +16,7 @@ class FrameBuffer:
     vga_shape = (480, 640)
     hd_shape = (800, 1280)
     
-    def __init__(self, s, d, img_shape):
+    def __init__(self, s, d, img_shape, name):
         self.size = s
         self.raw = []
         self.data = []
@@ -24,7 +24,7 @@ class FrameBuffer:
         self.count = 0
         self.comb = self.__disp_comb()
         self.direction = d
-#        self.template = cv2.imread(path+'template.tif', cv2.IMREAD_GRAYSCALE)
+        self.belt_name = name
         self.minViableStereoBaseline = self.__viable_stereo_baseline(img_shape)
         
     def __reset(self, r, f):
@@ -55,7 +55,7 @@ class FrameBuffer:
         if  shape == self.vga_shape:
             x = 70.0
         elif shape == self.hd_shape:
-            x = 30.0
+            x = 20.0
         else:
             raise RuntimeError('Unknown video resolution')
             
@@ -63,7 +63,7 @@ class FrameBuffer:
     
     def __check_motion(self,f0,f1):
         err = False    
-        dx, conf = bt.getBeltMotionByTemplateMatching(f0, f1)
+        dx, conf = bt.getBeltMotionByTemplateMatching(self.belt_name, f0, f1)
         if conf < 0.9:
             err = True
         if (self.direction == 'forwards' and dx < 0) or (self.direction == 'backwards' and dx > 0):
