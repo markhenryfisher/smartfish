@@ -101,7 +101,7 @@ def getBeltMotionByTemplateMatching(belt_name, img0, img1, max_travel=50):
     if belt_name == 'HARVESTER':
         template = f0[:,startx:stopx]
     elif belt_name == 'MRV SCOTIA':
-        template = f0[445:-1, startx:stopx]
+        template = f0[:, startx:stopx] #f0[445:-1, startx:stopx]
     else:
         raise RuntimeError('Unknown belt')
     

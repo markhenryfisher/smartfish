@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+08.03.19 - rechecking baseline (doesn't make much difference)
 07.03.19 - testing MRV SCOTIA. Mod. to set sgbm parameters depending on belt.
 06.03.19 - branch @revision 31
 04.03.19 - now writing all results and debug to C:\fish\data... video output filename is
@@ -85,7 +86,11 @@ def process_video(video_name,
         print('\nSpooling to Frame {}...'.format(start))
     frame_i = 0
     while True:
-#        sys.stdout.write('\rFrame {}'.format(frame_i))
+        if not debug:
+            sys.stdout.write('\rFrame {}'.format(frame_i))
+        else:
+            print('Frame {}'.format(frame_i))
+                
 
         if frame_i < start:
             success, img = cap.read()
@@ -106,7 +111,6 @@ def process_video(video_name,
                         
                 buff.push(img, dst)
             
-            print('Frame {}'.format(frame_i))
             r = buff.raw[-1]
             f = buff.data[-1]
             x = buff.x[-1]
@@ -161,7 +165,7 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--video_name', type=str, default="Belt E base",
                         help='video name.')
-    parser.add_argument('--start', type=int, default=55, help='Start at frame=start_idx')
+    parser.add_argument('--start', type=int, default=1, help='Start at frame=start_idx')
     parser.add_argument('--stop', type=int, default=500, help='Stop at frame=stop_idx')
     args = parser.parse_args()
     
@@ -173,13 +177,13 @@ if __name__ == '__main__':
     args = parse_args()
     
     video_name = args.video_name
-#    video_name = 'vlc-record-2018-05-30-14h32m23s-ABSENT-ABSENT-180122_141435-C4H-141-180204_085409_188.MP4-'
+    video_name = 'vlc-record-2018-05-30-14h32m23s-ABSENT-ABSENT-180122_141435-C4H-141-180204_085409_188.MP4-'
     
     process_video(video_name, 
               buffSize = 6, 
               start = args.start, 
               stop = args.stop,
-              direction = 'forwards',
+              direction = 'backwards',
               iFlag = False,
               debug = False)
     

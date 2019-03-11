@@ -3,25 +3,7 @@
 Misc Utils for SGBM Stereo
 
 @author MHF
-"""
-def ground_truth(img, dx, template):
-    """
-    find belt mask
-    """
-    import cv2
-    from utils import image_plotting as ip
-    from belt import belt_travel as bt
-    
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = ip.translateImg(img, (dx, 0))
-    mask = bt.match_template(img, template)
-    
-#    cv2.imshow('img', img)
-#    cv2.imshow('temp', template)
-#    cv2.imshow('mask', mask)
-#    cv2.waitKey(0)
-    
-    return mask       
+"""    
 
 def stereoPreprocess(imgL, imgR, alpha = 0.25, k = 3): 
     """
@@ -92,9 +74,9 @@ def sgbmDisparity(imgL, imgR, params, minDisp=0, numDisp= 16, fFlag=False):
         P2 = p2,
         disp12MaxDiff = 1,
 #        preFilterCap = 63,
-        uniquenessRatio = 5, 
-#        speckleWindowSize = 512,
-#        speckleRange = 128,
+        uniquenessRatio = 50, 
+        speckleWindowSize = 256,
+        speckleRange = 64,
         mode = cv2.STEREO_SGBM_MODE_HH
     )    
     stereoR = cv2.ximgproc.createRightMatcher(stereoL)
@@ -186,7 +168,7 @@ def computeDisparity(imgL, imgR, dx, params, iFlag=True, debug=False):
     """
     computeDisparity - run cctv stereo processing pipeline
     """
-    import cv2
+#    import cv2
     import numpy as np
     from utils import image_plotting as ip
 
@@ -195,7 +177,8 @@ def computeDisparity(imgL, imgR, dx, params, iFlag=True, debug=False):
     minDisp = -1
     numDisp=16
 #    dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp, numDisp, alg='sgbm', iFlag=iFlag)
-       
+
+    distance_to_camera = 2 #meters       
     dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, params, minDisp=minDisp, numDisp=numDisp)
     
     h,w = dispL.shape
@@ -209,7 +192,7 @@ def computeDisparity(imgL, imgR, dx, params, iFlag=True, debug=False):
     dispL = dispL - (minDisp*16)
     
     # normalise disparity
-    weight_factor = 1 / (abs(dx) + 1)
+    weight_factor = 1 / (abs(dx) + distance_to_camera)
     out = ( dispL / 16.0 ) * weight_factor
      
     return out
@@ -222,7 +205,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     import numpy as np
     import cv2
     from utils import image_plotting as ip
-    import sys
+    from belt import belt_travel as bt
     import os
     
     if buff.belt_name == 'MRV SCOTIA': # belt has no texture
@@ -232,11 +215,10 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     threshold = buff.minViableStereoBaseline / (buff.size + 1)
     imgRef = buff.data[-1]
     h, w = imgRef.shape[:2]
-    #z_buff = np.zeros((h,w,buff.comb))
     sumDisp = np.zeros((h,w))
     n = 0
     dxMax = buff.getLargestStereoBaseline()
-    print("\nProcessing %s frames; Ref frame %s; Belt transport %s." % (buff.nItems(),count,dxMax))    
+    #print("\nProcessing %s frames; Ref frame %s; Belt transport %s." % (buff.nItems(),count,dxMax))    
     for i in range(buff.nItems()-1,-1,-1):
         for j in range(i-1,-1,-1):
             imgR = buff.data[i]
@@ -244,12 +226,17 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             # stereo baseline
             dx = buff.x[i] - buff.x[j]
             
+            # recheck stereo baseline
+            new_dx = bt.getBeltMotionByTemplateMatching(buff.belt_name, imgL, imgR, max_travel=int(abs(dx)+5))
+            # print('dx={}; new_dx={}'.format(dx, new_dx[0]))
+            dx = new_dx[0]
+                       
             # we assume belt moves left-to-right
             if buff.direction == 'backwards':
                 imgR = np.flip(imgR,axis=1)
                 imgL = np.flip(imgL,axis=1)
                 dx = -dx
-            
+                         
             # reference translation
             tdx = abs(np.int(np.round(buff.x[-1] - buff.x[i])))
 
@@ -260,7 +247,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
                 filename = os.path.join(temp_path, "imgL"+str(count)+".jpg")
                 cv2.imwrite(filename, imgL)                                
             if abs(dx)>threshold: 
-                print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
+                #print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
                 disp = computeDisparity(imgL, imgR, dx, params, iFlag, debug)
 #                if debug:
 #                    vis = np.uint8(ip.rescale(disp, (0,255)))
@@ -289,6 +276,6 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     if debug:
         # write results to file
         filename = os.path.join(temp_path, "Mean"+str(count)+".jpg")
-        cv2.imwrite(filename, out2)
+        cv2.imwrite(filename, out1)
          
     return out1, out2
