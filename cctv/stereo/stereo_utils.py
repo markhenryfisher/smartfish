@@ -156,7 +156,6 @@ def findDisparity(imgL, imgR, params, minDisp=0, numDisp=16, fFlag=False, iFlag=
     if iFlag:
         dispL = inpaintUnmatchedBlocks(np.float32(dispL))
     else:
-#        dispL = np.clip(dispL, 0, 255)
         pass
         
     
@@ -228,7 +227,6 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             
             # recheck stereo baseline
             new_dx = bt.getBeltMotionByTemplateMatching(buff.belt_name, imgL, imgR, max_travel=int(abs(dx)+5))
-            # print('dx={}; new_dx={}'.format(dx, new_dx[0]))
             dx = new_dx[0]
                        
             # we assume belt moves left-to-right
@@ -247,13 +245,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
                 filename = os.path.join(temp_path, "imgL"+str(count)+".jpg")
                 cv2.imwrite(filename, imgL)                                
             if abs(dx)>threshold: 
-                #print('Using imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
                 disp = computeDisparity(imgL, imgR, dx, params, iFlag, debug)
-#                if debug:
-#                    vis = np.uint8(ip.rescale(disp, (0,255)))
-#                    vis_color = cv2.applyColorMap(vis, cv2.COLORMAP_JET)
-#                    cv2.imshow('Disp', vis_color)
-#                    cv2.waitKey(500)
                 disp = ip.translateImg(disp, (-tdx, 0))  
                 sumDisp = sumDisp + disp 
                 n += 1

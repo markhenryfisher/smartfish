@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+11.03.19 - Changed get belt motion.
 08.03.19 - rechecking baseline (doesn't make much difference)
 07.03.19 - testing MRV SCOTIA. Mod. to set sgbm parameters depending on belt.
 06.03.19 - branch @revision 31
@@ -84,7 +85,10 @@ def process_video(video_name,
     
     if start > 0:
         print('\nSpooling to Frame {}...'.format(start))
+
+    out1 = out2 = cv2.applyColorMap(np.zeros(video.img_shape, dtype=np.ubyte), cv2.COLORMAP_JET)
     frame_i = 0
+    
     while True:
         if not debug:
             sys.stdout.write('\rFrame {}'.format(frame_i))
@@ -116,14 +120,15 @@ def process_video(video_name,
             x = buff.x[-1]
             
             # compute disparity if sufficient stereo baseline
-            if x == 0 and frame_i > start:
-                out1 = out2 = cv2.applyColorMap(np.zeros(video.img_shape, dtype=np.ubyte), cv2.COLORMAP_JET)
-            elif buff.sufficientStereoBaseline:
+            if buff.sufficientStereoBaseline:
                 out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, video.belt.debug_dir)
             else:
-                out1 = ip.translateImg(out1, (buff.getLastdx(), 0))
-                out2 = ip.translateImg(out2, (buff.getLastdx(), 0))
-            
+                print('Insufficient Stereo Baseline!')
+
+#else:
+#                out1 = ip.translateImg(out1, (buff.getLastdx(), 0))
+#                out2 = ip.translateImg(out2, (buff.getLastdx(), 0))
+#            
             # gather image frames and montage
             vis0 = r.copy()
             draw_str(vis0, (20, 20), 'Frame: %d D: %.2f' %(frame_i,x))
@@ -165,7 +170,7 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--video_name', type=str, default="Belt E base",
                         help='video name.')
-    parser.add_argument('--start', type=int, default=1, help='Start at frame=start_idx')
+    parser.add_argument('--start', type=int, default=0, help='Start at frame=start_idx')
     parser.add_argument('--stop', type=int, default=500, help='Stop at frame=stop_idx')
     args = parser.parse_args()
     
@@ -179,13 +184,14 @@ if __name__ == '__main__':
     video_name = args.video_name
     video_name = 'vlc-record-2018-05-30-14h32m23s-ABSENT-ABSENT-180122_141435-C4H-141-180204_085409_188.MP4-'
     
+    # Note: Ensure buffSize is large enough to give sufficient stereo baseline and direction of belt is set correctly (forwards is left-to-right).
     process_video(video_name, 
               buffSize = 6, 
               start = args.start, 
               stop = args.stop,
               direction = 'backwards',
               iFlag = False,
-              debug = False)
+              debug = True)
     
     
     
