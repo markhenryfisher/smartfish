@@ -16,7 +16,7 @@ class FrameBuffer:
     vga_shape = (480, 640)
     hd_shape = (800, 1280)
     
-    def __init__(self, s, d, img_shape, name):
+    def __init__(self, s, d, video):
         self.size = s
         self.raw = []
         self.data = []
@@ -24,8 +24,9 @@ class FrameBuffer:
         self.count = 0
         self.comb = self.__disp_comb()
         self.direction = d
-        self.belt_name = name
-        self.minViableStereoBaseline = self.__viable_stereo_baseline(img_shape)
+        self.belt_name = video.belt.name
+        self.minViableStereoBaseline = self.__viable_stereo_baseline(video.img_shape)
+        self.video = video
         
     def __reset(self, r, f):
         """

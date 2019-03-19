@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+19.03.19 - stereo_utils now recovers 3d model (xyz) using camera_matrix. Will need to add fix for Harvester at some point in the future.  
 11.03.19 - Changed get belt motion.
 08.03.19 - rechecking baseline (doesn't make much difference)
 07.03.19 - testing MRV SCOTIA. Mod. to set sgbm parameters depending on belt.
@@ -80,7 +81,7 @@ def process_video(video_name,
         mapping_x, mapping_y = belt_calib.lens_distort_rectilinear_mapping(lens_calib, video.img_shape)
 
 
-    buff = frame_buffer.FrameBuffer(buffSize, direction, video.img_shape, video.belt.name)
+    buff = frame_buffer.FrameBuffer(buffSize, direction, video)
     outvidfilename = None
     
     if start > 0:
@@ -135,7 +136,7 @@ def process_video(video_name,
             vis1 = f.copy()
             draw_str(vis1, (20, 20), 'Rectified')
             vis2 = out1.copy()
-            draw_str(vis2, (20,20), 'Disparity')
+            draw_str(vis2, (20,20), 'Depth')
             vis3 = out2.copy()
             frametxt = "Buff: %s-%s; Largest Stereo Baseline: %s." % (frame_i,frame_i+buff.nItems()-1,round(buff.getLargestStereoBaseline()))    
             draw_str(vis3, (20, 20), frametxt)
@@ -150,7 +151,7 @@ def process_video(video_name,
             cv2.imshow('Stereo', out_frame)
             out.write(out_frame)
             
-            k = cv2.waitKey(1)          
+            k = cv2.waitKey(0)          
             if k == 27 or frame_i >= stop:
                 cap.release()
                 out.release()

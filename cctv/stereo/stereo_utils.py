@@ -3,7 +3,21 @@
 Misc Utils for SGBM Stereo
 
 @author MHF
-"""    
+"""   
+
+def getQmatrix(cam_matrix, dx):
+    import numpy as np
+    
+    fx = cam_matrix[0,0] # focal length
+    cx = cam_matrix[0,2] # principal point x-coord
+    cy = cam_matrix[1,2] # principal point y-coord
+    Tx = dx # stereo baseline length
+    
+    Q = np.array([[1, 0, 0, -cx], [0, 1, 0, -cy], [0, 0, 0, fx], [0, 0, 1/Tx, 0]])
+    
+    return Q
+    
+    
 
 def stereoPreprocess(imgL, imgR, alpha = 0.25, k = 3): 
     """
@@ -158,26 +172,24 @@ def findDisparity(imgL, imgR, params, minDisp=0, numDisp=16, fFlag=False, iFlag=
     else:
         pass
         
-    
-        
     return dispL, dispR, wlsL, wlsConf
 
 
-def computeDisparity(imgL, imgR, dx, params, iFlag=True, debug=False):
+def compute3d(imgL, imgR, dx, tdx, params, cam_matrix, iFlag=True, debug=False):
     """
     computeDisparity - run cctv stereo processing pipeline
     """
 #    import cv2
     import numpy as np
     from utils import image_plotting as ip
+    import cv2
 
     imgL, imgR = stereoPreprocess(imgL, imgR)
     
     minDisp = -1
     numDisp=16
 #    dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp, numDisp, alg='sgbm', iFlag=iFlag)
-
-    distance_to_camera = 2 #meters       
+       
     dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, params, minDisp=minDisp, numDisp=numDisp)
     
     h,w = dispL.shape
@@ -189,12 +201,17 @@ def computeDisparity(imgL, imgR, dx, params, iFlag=True, debug=False):
     dispL[np.where( dispL == ((minDisp-1)*16))] = minDisp*16
     # make all pixels +ve
     dispL = dispL - (minDisp*16)
+    # translate disparity to compensate for belt motion
+    dispL = ip.translateImg(dispL, (-tdx, 0))  
     
-    # normalise disparity
-    weight_factor = 1 / (abs(dx) + distance_to_camera)
-    out = ( dispL / 16.0 ) * weight_factor
-     
-    return out
+    # recover 3D image
+    baseline = abs(dx)
+    temp = np.float32((dispL / 16.0) + baseline)
+    xyz = np.empty([h, w, 3], np.float64)
+    Qmatrix = getQmatrix(cam_matrix, baseline)
+    xyz = cv2.reprojectImageTo3D(temp, Qmatrix) 
+    
+    return xyz
 
 def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = './'):
     """
@@ -207,14 +224,17 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     from belt import belt_travel as bt
     import os
     
+    
     if buff.belt_name == 'MRV SCOTIA': # belt has no texture
         params = ('sgbm', 15, 8*3*15**2, 32*3*15**2)
     else:
         params = ('sgbm', 15, 2*1*15**2, 8*1*15**2)
+        
+    camera_matrix = buff.video.lens_calibration.camera_matrix
     threshold = buff.minViableStereoBaseline / (buff.size + 1)
     imgRef = buff.data[-1]
     h, w = imgRef.shape[:2]
-    sumDisp = np.zeros((h,w))
+    sumDepth = np.zeros((h,w))
     n = 0
     dxMax = buff.getLargestStereoBaseline()
     #print("\nProcessing %s frames; Ref frame %s; Belt transport %s." % (buff.nItems(),count,dxMax))    
@@ -245,25 +265,38 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
                 filename = os.path.join(temp_path, "imgL"+str(count)+".jpg")
                 cv2.imwrite(filename, imgL)                                
             if abs(dx)>threshold: 
-                disp = computeDisparity(imgL, imgR, dx, params, iFlag, debug)
-                disp = ip.translateImg(disp, (-tdx, 0))  
-                sumDisp = sumDisp + disp 
+                xyz = compute3d(imgL, imgR, dx, tdx, params, camera_matrix, iFlag, debug)
+                sumDepth = sumDepth + xyz[:,:,2]     
                 n += 1
                 
     # average disparity
     if n>0:
-        avDisp = sumDisp / n
+        avDepth = sumDepth / n
     else:
-        avDisp = sumDisp
+        avDepth = sumDepth
+        
+    #save the 3d point cloud     
+    if debug:
+        xyz[:,:,2] = avDepth
+        colors = cv2.cvtColor(imgRef, cv2.COLOR_BGR2RGB)
+        
+        #  filter points
+        mask = avDepth <= camera_matrix[0,0]
+        out_points = xyz[mask]
+        out_colors = colors[mask]
+        
+        # write to file
+        filename = os.path.join(temp_path, "xyz"+str(count)+".ply")
+        ip.write_ply(filename, out_points, out_colors)
     
     #rescaling set empirically: cctv = (0.02, 0.25) hdtv = (0, 0.12)
-    avDisp = np.uint8(ip.rescale(avDisp, (0,255), (0, 0.2)))
-    avDisp[:,-int(dxMax):-1] = 0
+    visDepth = np.uint8(ip.rescale(avDepth, (0,255)))
+#    avDisp[:,-int(dxMax):-1] = 0
     if buff.direction == 'backwards':
-        avDisp = np.fliplr(avDisp)
+        visDepth = np.fliplr(visDepth)
     
-    out1 = cv2.applyColorMap(avDisp, cv2.COLORMAP_JET)   
-    out2 = ip.overlay(imgRef, avDisp)
+    out1 = cv2.applyColorMap(visDepth, cv2.COLORMAP_JET)   
+    out2 = ip.overlay(imgRef, visDepth)
     
     if debug:
         # write results to file
