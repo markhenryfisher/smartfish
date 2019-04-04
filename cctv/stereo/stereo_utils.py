@@ -19,7 +19,7 @@ def getQmatrix(cam_matrix, dx):
     
     
 
-def stereoPreprocess(imgL, imgR, alpha = 0.25, k = 3): 
+def stereoPreprocess(imgL, imgR, alpha = 0.75, k = 3): 
     """
     stereoPreprocess - Prepares images for stereo disparity
     Use Sobel kernel size = 3 for cctv, = 5 for hdtv 
@@ -28,20 +28,32 @@ def stereoPreprocess(imgL, imgR, alpha = 0.25, k = 3):
     import numpy as np
     import cv2
     
-    imgL = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
-    imgR = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
+    outL = imgL.copy()
+    outR = imgR.copy()
+    
+    imgLgrey = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
+    imgRgrey = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
 
-    imgL = cv2.equalizeHist(imgL)
-    imgR = cv2.equalizeHist(imgR)
+    imgLequ = cv2.equalizeHist(imgLgrey)
+    imgRequ = cv2.equalizeHist(imgRgrey)
     
     # prefilter
-    edgeL = np.uint8(ip.rescale(abs(cv2.Sobel(imgL,cv2.CV_64F,1,0,ksize=k)), (0,255)))
-    edgeR = np.uint8(ip.rescale(abs(cv2.Sobel(imgR,cv2.CV_64F,1,0,ksize=k)), (0,255)))
+    edgeL = np.uint8(ip.rescale(abs(cv2.Sobel(imgLequ,cv2.CV_64F,1,0,ksize=k)), (0,255)))
+    edgeR = np.uint8(ip.rescale(abs(cv2.Sobel(imgRequ,cv2.CV_64F,1,0,ksize=k)), (0,255)))
     # blend edges and raw
-    imgL = np.uint8(ip.blend(edgeL, imgL, alpha))
-    imgR = np.uint8(ip.blend(edgeR, imgR, alpha))
+    if imgL.ndim == 1:
+        outL = np.uint8(ip.blend(edgeL, imgL, alpha))
+    else:
+        for idx in range(imgL.ndim):
+            outL[:,:,idx] = np.uint8(ip.blend(edgeL, imgL[:,:,idx], alpha))
+            
+    if imgR.ndim == 1:
+        outR = np.uint8(ip.blend(edgeR, imgR, alpha))
+    else:
+        for idx in range(imgR.ndim):
+            outR[:,:,idx] = np.uint8(ip.blend(edgeR, imgR[:,:,idx], alpha))
     
-    return imgL, imgR
+    return outL, outR
 
 def inpaintUnmatchedBlocks(src):
     import numpy as np
@@ -88,9 +100,9 @@ def sgbmDisparity(imgL, imgR, params, minDisp=0, numDisp= 16, fFlag=False):
         P2 = p2,
         disp12MaxDiff = 1,
 #        preFilterCap = 63,
-        uniquenessRatio = 50, 
-        speckleWindowSize = 256,
-        speckleRange = 64,
+        uniquenessRatio = 20, 
+        speckleWindowSize = 64,
+        speckleRange = 32,
         mode = cv2.STEREO_SGBM_MODE_HH
     )    
     stereoR = cv2.ximgproc.createRightMatcher(stereoL)
@@ -118,18 +130,15 @@ def sgbmDisparity(imgL, imgR, params, minDisp=0, numDisp= 16, fFlag=False):
     return dispL, dispR, wlsL, wlsConf
     
 
-def bmDisparity(imgL, imgR, dx=0):
+def bmDisparity(imgL, imgR, params, minDisp, numDisp):
     import cv2
     
-    imgL = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
-    imgR = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
+    if imgL.ndim == 3:
+        imgL = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
+    if imgR.ndim == 3:
+        imgR = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
     
-    windowSize = 15
-    
-    minDisp, numDisp = getDispRange(dx)
-    
-    print('bm disparity, dx= ', dx)
-    print('numDisp', numDisp)
+    __, windowSize, __, __ = params
     
     if (numDisp<=0 or numDisp%16!=0):
         raise NameError('Incorrect max_disparity value: it should be positive and divisible by 16')
@@ -163,7 +172,7 @@ def findDisparity(imgL, imgR, params, minDisp=0, numDisp=16, fFlag=False, iFlag=
         dispL, dispR, wlsL, wlsConf = sgbmDisparity(imgL, imgR, params, minDisp, numDisp, fFlag=fFlag)
         
     elif alg=='bm':
-        dispL, dispR = bmDisparity(imgL, imgR)
+        dispL, dispR = bmDisparity(imgL, imgR, params, minDisp, numDisp)
     else:
         assert (False), 'Unknown disparity algorithm'
         
@@ -188,28 +197,32 @@ def compute3d(imgL, imgR, dx, tdx, params, cam_matrix, iFlag=True, debug=False):
     
     minDisp = -1
     numDisp=16
-#    dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, minDisp, numDisp, alg='sgbm', iFlag=iFlag)
+    
+#    cv2.imshow('imgL', imgL)
+#    cv2.imshow('imgR', imgR)
+#    cv2.waitKey(0)
+#    cv2.destroyAllWindows()
        
     dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, params, minDisp=minDisp, numDisp=numDisp)
     
     h,w = dispL.shape
     offset = min([minDisp, 0])
-    dispL[:,w-int(-dx)+offset:w] = minDisp*16
-    
-    
-    # set unmatched pixels to minDisp
-    dispL[np.where( dispL == ((minDisp-1)*16))] = minDisp*16
+    dispL[:,w-int(-dx)+offset:w] = (minDisp-1)*16
+     
     # make all pixels +ve
-    dispL = dispL - (minDisp*16)
-    # translate disparity to compensate for belt motion
+    dispL = dispL - ((minDisp-1)*16)
+    # align disparity with reference imgR
     dispL = ip.translateImg(dispL, (-tdx, 0))  
     
     # recover 3D image
     baseline = abs(dx)
     temp = np.float32((dispL / 16.0) + baseline)
-    xyz = np.empty([h, w, 3], np.float64)
     Qmatrix = getQmatrix(cam_matrix, baseline)
     xyz = cv2.reprojectImageTo3D(temp, Qmatrix) 
+
+    # replace depth == focal length with nan
+    focal_length = cam_matrix[0,0]
+    xyz[np.where(xyz==focal_length)] = np.nan
     
     return xyz
 
@@ -226,28 +239,31 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     
     
     if buff.belt_name == 'MRV SCOTIA': # belt has no texture
-        params = ('sgbm', 15, 8*3*15**2, 32*3*15**2)
+        params = ('sgbm', 15, 2*3*15**2, 8*3*15**2)
     else:
         params = ('sgbm', 15, 2*1*15**2, 8*1*15**2)
         
     camera_matrix = buff.video.lens_calibration.camera_matrix
-    threshold = buff.minViableStereoBaseline / (buff.size + 1)
+    threshold = buff.minViableStereoBaseline * 3 / 4
     imgRef = buff.data[-1]
     h, w = imgRef.shape[:2]
-    sumDepth = np.zeros((h,w))
+    # save successsive depth maps to depthStack
+    depthStack = []
+    # observation window 
+    watch = []
     n = 0
-    dxMax = buff.getLargestStereoBaseline()
+#    dxMax = buff.getLargestStereoBaseline()
     #print("\nProcessing %s frames; Ref frame %s; Belt transport %s." % (buff.nItems(),count,dxMax))    
     for i in range(buff.nItems()-1,-1,-1):
         for j in range(i-1,-1,-1):
-            imgR = buff.data[i]
-            imgL = buff.data[j]
+            imgR = buff.data[i].copy()
+            imgL = buff.data[j].copy()
             # stereo baseline
             dx = buff.x[i] - buff.x[j]
             
             # recheck stereo baseline
-            new_dx = bt.getBeltMotionByTemplateMatching(buff.belt_name, imgL, imgR, max_travel=int(abs(dx)+5))
-            dx = new_dx[0]
+#            new_dx = bt.getBeltMotionByTemplateMatching(buff.belt_name, imgL, imgR, max_travel=int(abs(dx)+5))
+#            dx = new_dx[0]
                        
             # we assume belt moves left-to-right
             if buff.direction == 'backwards':
@@ -258,22 +274,31 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             # reference translation
             tdx = abs(np.int(np.round(buff.x[-1] - buff.x[i])))
 
-            if debug:
-                print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-                filename = os.path.join(temp_path, "imgR"+str(count)+".jpg")
-                cv2.imwrite(filename, imgR)
-                filename = os.path.join(temp_path, "imgL"+str(count)+".jpg")
-                cv2.imwrite(filename, imgL)                                
-            if abs(dx)>threshold: 
+            if abs(dx)>threshold: # and i == 13:
+                if debug:
+                    print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
+                    filename = os.path.join(temp_path, "imgR"+str(count)+".jpg")
+                    cv2.imwrite(filename, imgR)
+                    filename = os.path.join(temp_path, "imgL"+str(count)+".jpg")
+                    cv2.imwrite(filename, imgL)                                
+             
                 xyz = compute3d(imgL, imgR, dx, tdx, params, camera_matrix, iFlag, debug)
-                sumDepth = sumDepth + xyz[:,:,2]     
+                watch.append(xyz[140:145,w-485:w-480,2])
+                depthStack.append(xyz[:,:,2])      
                 n += 1
                 
-    # average disparity
+    depthArr = np.asarray(depthStack)
     if n>0:
-        avDepth = sumDepth / n
+        # average disparity maps ignoring nan entries
+        avDepth = np.nanmean(depthArr, axis=0) 
+        # map nan values onto a depth plane 
+        avDepth[np.isnan(avDepth)] = np.nanmax(avDepth)+1 #-np.inf
     else:
-        avDepth = sumDepth
+        avDepth = np.zeros((h,w), dtype=np.float64)
+        
+    if buff.direction == 'backwards':
+        avDepth = np.fliplr(avDepth)
+
         
     #save the 3d point cloud     
     if debug:
@@ -281,7 +306,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         colors = cv2.cvtColor(imgRef, cv2.COLOR_BGR2RGB)
         
         #  filter points
-        mask = avDepth <= camera_matrix[0,0]
+        mask = avDepth > 0 #<= camera_matrix[0,0]
         out_points = xyz[mask]
         out_colors = colors[mask]
         
@@ -289,12 +314,8 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         filename = os.path.join(temp_path, "xyz"+str(count)+".ply")
         ip.write_ply(filename, out_points, out_colors)
     
-    #rescaling set empirically: cctv = (0.02, 0.25) hdtv = (0, 0.12)
-    visDepth = np.uint8(ip.rescale(avDepth, (0,255)))
-#    avDisp[:,-int(dxMax):-1] = 0
-    if buff.direction == 'backwards':
-        visDepth = np.fliplr(visDepth)
-    
+    # render out1, out2
+    visDepth = np.uint8(ip.rescale(avDepth, (0,255)))    
     out1 = cv2.applyColorMap(visDepth, cv2.COLORMAP_JET)   
     out2 = ip.overlay(imgRef, visDepth)
     

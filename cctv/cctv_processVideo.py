@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+04.04.19 - average xyz now ignores nan values. Other bug fixes. Tested using bm and sgbm on frame 223.
 19.03.19 - stereo_utils now recovers 3d model (xyz) using camera_matrix. Will need to add fix for Harvester at some point in the future.  
 11.03.19 - Changed get belt motion.
 08.03.19 - rechecking baseline (doesn't make much difference)
@@ -116,8 +117,8 @@ def process_video(video_name,
                         
                 buff.push(img, dst)
             
-            r = buff.raw[-1]
-            f = buff.data[-1]
+            r = buff.raw[-1].copy()
+            f = buff.data[-1].copy()
             x = buff.x[-1]
             
             # compute disparity if sufficient stereo baseline
@@ -131,9 +132,9 @@ def process_video(video_name,
 #                out2 = ip.translateImg(out2, (buff.getLastdx(), 0))
 #            
             # gather image frames and montage
-            vis0 = r.copy()
+            vis0 = r
             draw_str(vis0, (20, 20), 'Frame: %d D: %.2f' %(frame_i,x))
-            vis1 = f.copy()
+            vis1 = f
             draw_str(vis1, (20, 20), 'Rectified')
             vis2 = out1.copy()
             draw_str(vis2, (20,20), 'Depth')
@@ -171,8 +172,8 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--video_name', type=str, default="Belt E base",
                         help='video name.')
-    parser.add_argument('--start', type=int, default=0, help='Start at frame=start_idx')
-    parser.add_argument('--stop', type=int, default=500, help='Stop at frame=stop_idx')
+    parser.add_argument('--start', type=int, default=223, help='Start at frame=start_idx')
+    parser.add_argument('--stop', type=int, default=223, help='Stop at frame=stop_idx')
     args = parser.parse_args()
     
     return args
@@ -187,7 +188,7 @@ if __name__ == '__main__':
     
     # Note: Ensure buffSize is large enough to give sufficient stereo baseline and direction of belt is set correctly (forwards is left-to-right).
     process_video(video_name, 
-              buffSize = 6, 
+              buffSize = 14, 
               start = args.start, 
               stop = args.stop,
               direction = 'backwards',

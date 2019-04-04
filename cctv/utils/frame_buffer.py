@@ -56,7 +56,7 @@ class FrameBuffer:
         if  shape == self.vga_shape:
             x = 70.0
         elif shape == self.hd_shape:
-            x = 20.0
+            x = 70.0
         else:
             raise RuntimeError('Unknown video resolution')
             
