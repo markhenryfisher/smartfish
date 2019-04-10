@@ -195,7 +195,7 @@ def compute3d(imgL, imgR, dx, tdx, params, cam_matrix, iFlag=True, debug=False):
 
     imgL, imgR = stereoPreprocess(imgL, imgR)
     
-    minDisp = -1
+    minDisp = 0
     numDisp=16
     
 #    cv2.imshow('imgL', imgL)
@@ -234,7 +234,8 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     import numpy as np
     import cv2
     from utils import image_plotting as ip
-    from belt import belt_travel as bt
+    from utils import region_growing as rg
+#    from belt import belt_travel as bt
     import os
     
     
@@ -245,7 +246,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         
     camera_matrix = buff.video.lens_calibration.camera_matrix
     threshold = buff.minViableStereoBaseline * 3 / 4
-    imgRef = buff.data[-1]
+    imgRef = buff.data[-1].copy()
     h, w = imgRef.shape[:2]
     # save successsive depth maps to depthStack
     depthStack = []
@@ -276,11 +277,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
 
             if abs(dx)>threshold: # and i == 13:
                 if debug:
-                    print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))
-                    filename = os.path.join(temp_path, "imgR"+str(count)+".jpg")
-                    cv2.imwrite(filename, imgR)
-                    filename = os.path.join(temp_path, "imgL"+str(count)+".jpg")
-                    cv2.imwrite(filename, imgL)                                
+                    print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))                                
              
                 xyz = compute3d(imgL, imgR, dx, tdx, params, camera_matrix, iFlag, debug)
                 watch.append(xyz[140:145,w-485:w-480,2])
@@ -306,7 +303,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         colors = cv2.cvtColor(imgRef, cv2.COLOR_BGR2RGB)
         
         #  filter points
-        mask = avDepth > 0 #<= camera_matrix[0,0]
+        mask = rg.seg_foreground_object(abs(colors-255))
         out_points = xyz[mask]
         out_colors = colors[mask]
         
@@ -321,7 +318,9 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     
     if debug:
         # write results to file
-        filename = os.path.join(temp_path, "Mean"+str(count)+".jpg")
+        filename = os.path.join(temp_path, "frame"+str(count)+".jpg") 
+        cv2.imwrite(filename, imgRef)
+        filename = os.path.join(temp_path, str(n)+"mean"+str(count)+".jpg")
         cv2.imwrite(filename, out1)
          
     return out1, out2
