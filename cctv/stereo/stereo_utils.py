@@ -235,8 +235,10 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     import cv2
     from utils import image_plotting as ip
     from utils import region_growing as rg
+    from utils import myutils as myutils
 #    from belt import belt_travel as bt
     import os
+    import PIL
     
     
     if buff.belt_name == 'MRV SCOTIA': # belt has no texture
@@ -303,13 +305,33 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         colors = cv2.cvtColor(imgRef, cv2.COLOR_BGR2RGB)
         
         #  filter points
-        mask = rg.seg_foreground_object(abs(colors-255))
-        out_points = xyz[mask]
-        out_colors = colors[mask]
+        if os.path.isfile(os.path.join(temp_path, "mask"+str(count)+".npy")):
+            mask = np.load(os.path.join(temp_path, "mask"+str(count)+".npy"))
+        else:
+            img_grey = cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
+            img_bright_foreground = myutils.array2PIL(np.uint8(np.abs(np.int16(img_grey)-255)))
+            # enhance edges
+            img_bright_foreground = img_bright_foreground.filter(PIL.ImageFilter.EDGE_ENHANCE)
+            mask = myutils.PIL2array(rg.seg_foreground_object(img_bright_foreground))
+            mask = cv2.resize(mask, (w,h), cv2.INTER_NEAREST) > 0
+            np.save(os.path.join(temp_path, "mask"+str(count)), mask)
+        
+        # set belt to depth == focal length (disparity == baseline)
+        xyz[np.logical_not(mask),2] = camera_matrix[0,0]
+        # find ROI
+        im2, ctr, hiers  = cv2.findContours(np.uint8(mask), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        x, y, w, h = cv2.boundingRect(ctr[0])
+        out_points = xyz[y:y+h,x:x+w,:]
+        out_colors = colors[y:y+h,x:x+w,:]
+#        out_points = xyz[mask]
+#        out_colors = colors[mask]
         
         # write to file
         filename = os.path.join(temp_path, "xyz"+str(count)+".ply")
         ip.write_ply(filename, out_points, out_colors)
+        
+        visRef = imgRef.copy()
+        cv2.rectangle(visRef, (x,y), (x+w-2,y+h-2), (0,255,0), 2)
     
     # render out1, out2
     visDepth = np.uint8(ip.rescale(avDepth, (0,255)))    
@@ -323,4 +345,4 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         filename = os.path.join(temp_path, str(n)+"mean"+str(count)+".jpg")
         cv2.imwrite(filename, out1)
          
-    return out1, out2
+    return visRef, out1, out2

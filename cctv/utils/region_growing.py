@@ -5,7 +5,7 @@
 import sys
 import numpy as np
 import PIL
-import myutils
+import utils.myutils as myutils
 import matplotlib.pyplot as plt
 from scipy import ndimage
 

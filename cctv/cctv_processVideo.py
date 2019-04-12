@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+10.04.19 - mask used to select xyz saved to file is computed by region growing.
 04.04.19 - average xyz now ignores nan values. Other bug fixes. Tested using bm and sgbm on frame 223.
 19.03.19 - stereo_utils now recovers 3d model (xyz) using camera_matrix. Will need to add fix for Harvester at some point in the future.  
 11.03.19 - Changed get belt motion.
@@ -118,12 +119,12 @@ def process_video(video_name,
                 buff.push(img, dst)
             
             r = buff.raw[-1].copy()
-            f = buff.data[-1].copy()
+#            f = buff.data[-1].copy()
             x = buff.x[-1]
             
             # compute disparity if sufficient stereo baseline
             if buff.sufficientStereoBaseline:
-                out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, video.belt.debug_dir)
+                ref1, out1, out2 = stereo_utils.process_frame_buffer(buff, frame_i, iFlag, debug, video.belt.debug_dir)
             else:
                 print('Insufficient Stereo Baseline!')
 
@@ -134,7 +135,7 @@ def process_video(video_name,
             # gather image frames and montage
             vis0 = r
             draw_str(vis0, (20, 20), 'Frame: %d D: %.2f' %(frame_i,x))
-            vis1 = f
+            vis1 = ref1.copy()
             draw_str(vis1, (20, 20), 'Rectified')
             vis2 = out1.copy()
             draw_str(vis2, (20,20), 'Depth')
@@ -172,8 +173,8 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--video_name', type=str, default="Belt E base",
                         help='video name.')
-    parser.add_argument('--start', type=int, default=1491, help='Start at frame=start_idx')
-    parser.add_argument('--stop', type=int, default=1491, help='Stop at frame=stop_idx')
+    parser.add_argument('--start', type=int, default=223, help='Start at frame=start_idx')
+    parser.add_argument('--stop', type=int, default=223, help='Stop at frame=stop_idx')
     args = parser.parse_args()
     
     return args
