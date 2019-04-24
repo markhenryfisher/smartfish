@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+12.04.19 - v41 added a bounding box and set belt pixels to predefined depth 
 10.04.19 - mask used to select xyz saved to file is computed by region growing.
 04.04.19 - average xyz now ignores nan values. Other bug fixes. Tested using bm and sgbm on frame 223.
 19.03.19 - stereo_utils now recovers 3d model (xyz) using camera_matrix. Will need to add fix for Harvester at some point in the future.  
@@ -117,6 +118,7 @@ def process_video(video_name,
                         dst = dst[y:y+h, x:x+w]
                         
                 buff.push(img, dst)
+#                print('Average Travel: {}'.format(buff.dxAverage))
             
             r = buff.raw[-1].copy()
 #            f = buff.data[-1].copy()

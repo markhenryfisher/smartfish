@@ -110,5 +110,14 @@ class FrameBuffer:
         return self.count
     
     @property
+    def dxAverage(self):
+        if self.count < 2:
+            dst = 0.0
+        else:
+            dst = self.x[0] / float(self.count - 1)
+            
+        return dst
+    
+    @property
     def sufficientStereoBaseline(self):
         return self.getLargestStereoBaseline() > self.minViableStereoBaseline

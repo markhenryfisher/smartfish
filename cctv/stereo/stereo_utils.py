@@ -297,9 +297,11 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         
     if buff.direction == 'backwards':
         avDepth = np.fliplr(avDepth)
-
-        
-    #save the 3d point cloud     
+        for i in range(depthArr.shape[0]):
+            depthArr[i,:,:] = np.fliplr(depthArr[i,:,:])
+            
+      
+    #save the 3d point cloud; examine depth samples     
     if debug:
         xyz[:,:,2] = avDepth
         colors = cv2.cvtColor(imgRef, cv2.COLOR_BGR2RGB)
@@ -323,6 +325,9 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         x, y, w, h = cv2.boundingRect(ctr[0])
         out_points = xyz[y:y+h,x:x+w,:]
         out_colors = colors[y:y+h,x:x+w,:]
+        
+        # examine depth samples
+        ip.plot_transept((x,y,w,h), depthArr, imgRef)
 #        out_points = xyz[mask]
 #        out_colors = colors[mask]
         

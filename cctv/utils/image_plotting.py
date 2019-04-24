@@ -2,6 +2,21 @@ import numpy as np
 from skimage.color import hsv2rgb
 from skimage.filters import roberts
 import cv2
+import matplotlib.pyplot as plt
+
+def plot_transept(bb, depthArr, img):
+    x,y,w,h = bb
+    # visualize transept
+    plt.subplot(211)
+    plt.imshow(img)
+    plt.plot([x,x+w],[y+h//2,y+h//2])
+    # plot values
+    xx = np.linspace(x,x+w-1,w)
+    plt.subplot(212)
+    for i in range(depthArr.shape[0]):
+        yy = depthArr[i,y+h//2,x:x+w]
+        plt.plot(xx,yy)
+    
 
 def write_ply(fn, verts, colors):
     
