@@ -4,18 +4,30 @@ from skimage.filters import roberts
 import cv2
 import matplotlib.pyplot as plt
 
-def plot_transept(bb, depthArr, img):
+def plot_transept(bb, depthArr, img, filename):
     x,y,w,h = bb
+    img = img[y:y+h,x:x+w]
+    
+    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
+    
+    fig_size = plt.rcParams["figure.figsize"]
+    fig_size[1] = 6.0
+    plt.rcParams["figure.figsize"] = fig_size
     # visualize transept
-    plt.subplot(211)
-    plt.imshow(img)
-    plt.plot([x,x+w],[y+h//2,y+h//2])
+    ax1.imshow(img)
+    ax1.plot([0,w-1],[h//2,h//2])
+    ax1.set_aspect('auto')
     # plot values
-    xx = np.linspace(x,x+w-1,w)
-    plt.subplot(212)
     for i in range(depthArr.shape[0]):
         yy = depthArr[i,y+h//2,x:x+w]
-        plt.plot(xx,yy)
+        ax2.plot(yy, label=str(i))
+    ax2.legend(fontsize='small')
+    ax2.set_ylim([1050,1150])
+    
+    plt.draw()
+    plt.show()
+    fig.savefig(filename)
+    plt.close(fig)
     
 
 def write_ply(fn, verts, colors):

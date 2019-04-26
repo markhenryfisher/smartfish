@@ -277,7 +277,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             # reference translation
             tdx = abs(np.int(np.round(buff.x[-1] - buff.x[i])))
 
-            if abs(dx)>threshold: # and i == 13:
+            if abs(dx)>threshold and i == 13 and j > 2:
                 if debug:
                     print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))                                
              
@@ -327,7 +327,8 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         out_colors = colors[y:y+h,x:x+w,:]
         
         # examine depth samples
-        ip.plot_transept((x,y,w,h), depthArr, imgRef)
+        filename = os.path.join(temp_path, "plot"+str(count)+".png")
+        ip.plot_transept((x,y,w,h), depthArr, imgRef, filename)
 #        out_points = xyz[mask]
 #        out_colors = colors[mask]
         
