@@ -205,6 +205,9 @@ def compute3d(imgL, imgR, dx, tdx, params, cam_matrix, iFlag=True, debug=False):
        
     dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, params, minDisp=minDisp, numDisp=numDisp)
     
+    # find non-matching disparity values
+    no_match_idx = np.where(dispL==(minDisp-1)*16)
+    
     h,w = dispL.shape
     offset = min([minDisp, 0])
     dispL[:,w-int(-dx)+offset:w] = (minDisp-1)*16
@@ -220,9 +223,10 @@ def compute3d(imgL, imgR, dx, tdx, params, cam_matrix, iFlag=True, debug=False):
     Qmatrix = getQmatrix(cam_matrix, baseline)
     xyz = cv2.reprojectImageTo3D(temp, Qmatrix) 
 
-    # replace depth == focal length with nan
-    focal_length = cam_matrix[0,0]
-    xyz[np.where(xyz==focal_length)] = np.nan
+    # replace non-matching disparity values with NaN 
+    depth = xyz[:,:,2]
+    depth[no_match_idx] = np.nan
+    xyz[:,:,2] = depth
     
     return xyz
 
@@ -277,7 +281,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             # reference translation
             tdx = abs(np.int(np.round(buff.x[-1] - buff.x[i])))
 
-            if abs(dx)>threshold and i == 13 and j > 2:
+            if abs(dx)>threshold and i == 13 and j > 1 and j < 4:
                 if debug:
                     print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))                                
              

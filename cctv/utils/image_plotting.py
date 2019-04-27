@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 def plot_transept(bb, depthArr, img, filename):
     x,y,w,h = bb
     img = img[y:y+h,x:x+w]
+    title_string = "Transept: {},{};{},{};".format(x, y+h//2, x+w-1, y+h//2)
     
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
     
@@ -22,7 +23,8 @@ def plot_transept(bb, depthArr, img, filename):
         yy = depthArr[i,y+h//2,x:x+w]
         ax2.plot(yy, label=str(i))
     ax2.legend(fontsize='small')
-    ax2.set_ylim([1050,1150])
+    fig.suptitle(title_string)
+#    ax2.set_ylim([1050,1150])
     
     plt.draw()
     plt.show()

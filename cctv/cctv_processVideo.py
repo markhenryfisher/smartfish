@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+27.04.19 - Bug fix in stereo_utils
 25.04.19 - v42 analysis of depthArr by plotting scanline
 12.04.19 - v41 added a bounding box and set belt pixels to predefined depth 
 10.04.19 - mask used to select xyz saved to file is computed by region growing.
