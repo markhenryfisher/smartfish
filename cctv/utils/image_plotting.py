@@ -4,7 +4,28 @@ from skimage.filters import roberts
 import cv2
 import matplotlib.pyplot as plt
 
+def show_depth_with_scale(depth, filename):
+    vmin = np.min(depth)
+    vmax = np.max(depth)
+    cmap = plt.cm.jet
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    i = ax.imshow(depth, cmap=cmap)
+    ax.axis('off')
+    i.set_clim(vmin,vmax)
+    fig.colorbar(i,orientation='horizontal',label='Depth (mm)')
+    plt.title('Depth Map')
+
+    plt.show()
+    fig.savefig(filename)
+    plt.close(fig)
+    
+
 def plot_transept(bb, depthArr, img, filename):
+    """
+    plot_transept - plot depthArr values along a scanline (identified by a bounding box)
+    bb - bounding box
+    """
     x,y,w,h = bb
     img = img[y:y+h,x:x+w]
     title_string = "Transept: {},{};{},{};".format(x, y+h//2, x+w-1, y+h//2)

@@ -105,7 +105,8 @@ class FrameBuffer:
     def pop(self):
         self.count -= 1
         return self.raw.pop(), self.data.pop(), self.x.pop()
-        
+
+    @property    
     def nItems(self):
         return self.count
     

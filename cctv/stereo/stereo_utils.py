@@ -205,17 +205,21 @@ def compute3d(imgL, imgR, dx, tdx, params, cam_matrix, iFlag=True, debug=False):
        
     dispL, __, __, __ = findDisparity(ip.translateImg(imgL, (dx, 0)), imgR, params, minDisp=minDisp, numDisp=numDisp)
     
-    # find non-matching disparity values
-    no_match_idx = np.where(dispL==(minDisp-1)*16)
     
     h,w = dispL.shape
     offset = min([minDisp, 0])
     dispL[:,w-int(-dx)+offset:w] = (minDisp-1)*16
+    
+    # align disparity with reference imgR (set any "new" pixels to unmatched value)
+    dispL = ip.translateImg(dispL, (-tdx, 0)) 
+    dispL[:,w-tdx:w] = (minDisp-1)*16
+    
+    # find non-matching disparity values
+    no_match_idx = np.where(dispL==(minDisp-1)*16)
      
     # make all pixels +ve
     dispL = dispL - ((minDisp-1)*16)
-    # align disparity with reference imgR
-    dispL = ip.translateImg(dispL, (-tdx, 0))  
+
     
     # recover 3D image
     baseline = abs(dx)
@@ -259,9 +263,10 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     # observation window 
     watch = []
     n = 0
+    max_maps = 8
 #    dxMax = buff.getLargestStereoBaseline()
     #print("\nProcessing %s frames; Ref frame %s; Belt transport %s." % (buff.nItems(),count,dxMax))    
-    for i in range(buff.nItems()-1,-1,-1):
+    for i in range(buff.nItems-1,-1,-1):
         for j in range(i-1,-1,-1):
             imgR = buff.data[i].copy()
             imgL = buff.data[j].copy()
@@ -281,9 +286,11 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             # reference translation
             tdx = abs(np.int(np.round(buff.x[-1] - buff.x[i])))
 
-            if abs(dx)>threshold and i == 13 and j > 1 and j < 4:
+            frameR_n = count+(buff.nItems-1)-i
+            frameL_n = count+(buff.nItems-1)-j
+            if abs(dx)>threshold and n < max_maps: # todo fix this
                 if debug:
-                    print('imgR= %s : imgL= %s : dx= %s' % (i,j,dx))                                
+                    print('imgR= {} : imgL= {} : dx= {:.2f}'.format(frameR_n,frameL_n,dx))                                
              
                 xyz = compute3d(imgL, imgR, dx, tdx, params, camera_matrix, iFlag, debug)
                 watch.append(xyz[140:145,w-485:w-480,2])
@@ -295,7 +302,7 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         # average disparity maps ignoring nan entries
         avDepth = np.nanmean(depthArr, axis=0) 
         # map nan values onto a depth plane 
-        avDepth[np.isnan(avDepth)] = np.nanmax(avDepth)+1 #-np.inf
+        avDepth[np.isnan(avDepth)] = camera_matrix[0,0] #-np.inf
     else:
         avDepth = np.zeros((h,w), dtype=np.float64)
         
@@ -303,32 +310,33 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         avDepth = np.fliplr(avDepth)
         for i in range(depthArr.shape[0]):
             depthArr[i,:,:] = np.fliplr(depthArr[i,:,:])
-            
+
+    #  load (create) roi mask 
+    if os.path.isfile(os.path.join(temp_path, "mask"+str(count)+".npy")):
+        mask = np.load(os.path.join(temp_path, "mask"+str(count)+".npy"))
+    else:
+        img_grey = cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
+        img_bright_foreground = myutils.array2PIL(np.uint8(np.abs(np.int16(img_grey)-255)))
+        # enhance edges
+        img_bright_foreground = img_bright_foreground.filter(PIL.ImageFilter.EDGE_ENHANCE)
+        mask = myutils.PIL2array(rg.seg_foreground_object(img_bright_foreground))
+        mask = cv2.resize(mask, (w,h), cv2.INTER_NEAREST) > 0
+        np.save(os.path.join(temp_path, "mask"+str(count)), mask)
+           
       
     #save the 3d point cloud; examine depth samples     
     if debug:
         xyz[:,:,2] = avDepth
         colors = cv2.cvtColor(imgRef, cv2.COLOR_BGR2RGB)
-        
-        #  filter points
-        if os.path.isfile(os.path.join(temp_path, "mask"+str(count)+".npy")):
-            mask = np.load(os.path.join(temp_path, "mask"+str(count)+".npy"))
-        else:
-            img_grey = cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
-            img_bright_foreground = myutils.array2PIL(np.uint8(np.abs(np.int16(img_grey)-255)))
-            # enhance edges
-            img_bright_foreground = img_bright_foreground.filter(PIL.ImageFilter.EDGE_ENHANCE)
-            mask = myutils.PIL2array(rg.seg_foreground_object(img_bright_foreground))
-            mask = cv2.resize(mask, (w,h), cv2.INTER_NEAREST) > 0
-            np.save(os.path.join(temp_path, "mask"+str(count)), mask)
-        
-        # set belt to depth == focal length (disparity == baseline)
+                
+        # set depth == focal length outside roi (disparity == baseline)
         xyz[np.logical_not(mask),2] = camera_matrix[0,0]
         # find ROI
         im2, ctr, hiers  = cv2.findContours(np.uint8(mask), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         x, y, w, h = cv2.boundingRect(ctr[0])
         out_points = xyz[y:y+h,x:x+w,:]
         out_colors = colors[y:y+h,x:x+w,:]
+
         
         # examine depth samples
         filename = os.path.join(temp_path, "plot"+str(count)+".png")
@@ -344,8 +352,14 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         cv2.rectangle(visRef, (x,y), (x+w-2,y+h-2), (0,255,0), 2)
     
     # render out1, out2
+     # set depth == focal length outside roi (disparity == baseline)
+    avDepth[np.logical_not(mask)] = camera_matrix[0,0]
+    
+    # render
     visDepth = np.uint8(ip.rescale(avDepth, (0,255)))    
-    out1 = cv2.applyColorMap(visDepth, cv2.COLORMAP_JET)   
+    out1 = cv2.applyColorMap(visDepth, cv2.COLORMAP_JET) 
+    filename = os.path.join(temp_path, "map"+str(count)+".png")
+    ip.show_depth_with_scale(avDepth,filename)
     out2 = ip.overlay(imgRef, visDepth)
     
     if debug:

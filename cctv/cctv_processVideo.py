@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-27.04.19 - Bug fix in stereo_utils
+29.04.19 - v44 Bug fix in stereo_utils. Improved depth rendering. 
+            Saved Depth Map with colorbar. Improved spooling to start frame.
+            Nuber of disparity maps to sample is set to 8 in seteo_utils.
+27.04.19 - v43 Bug fix in stereo_utils
 25.04.19 - v42 analysis of depthArr by plotting scanline
 12.04.19 - v41 added a bounding box and set belt pixels to predefined depth 
 10.04.19 - mask used to select xyz saved to file is computed by region growing.
@@ -103,9 +106,12 @@ def process_video(video_name,
                 
 
         if frame_i < start:
-            success, img = cap.read()
-            if not success:
-                raise ValueError('Failed to read video frame')         
+#            success, img = cap.read()
+#            if not success:
+#                raise ValueError('Failed to read video frame') 
+                
+            cap.set(cv2.CAP_PROP_POS_FRAMES, start)
+            frame_i = start-1
         else:
             while buff.count < buff.size:
                 success, img = cap.read()
@@ -144,7 +150,7 @@ def process_video(video_name,
             vis2 = out1.copy()
             draw_str(vis2, (20,20), 'Depth')
             vis3 = out2.copy()
-            frametxt = "Buff: %s-%s; Largest Stereo Baseline: %s." % (frame_i,frame_i+buff.nItems()-1,round(buff.getLargestStereoBaseline()))    
+            frametxt = "Buff: %s-%s; Largest Stereo Baseline: %s." % (frame_i,frame_i+buff.nItems-1,round(buff.getLargestStereoBaseline()))    
             draw_str(vis3, (20, 20), frametxt)
 
             out_frame = ip.montage(2,2,(640, 480), vis0, vis1, vis2, vis3)
@@ -183,7 +189,7 @@ def parse_args():
     
     return args
         
-
+# Test frames: 223; 2150
 if __name__ == '__main__':
 
     args = parse_args()
