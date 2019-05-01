@@ -45,7 +45,7 @@ minViableStereoBaseline_hd = 30
       
 def process_video(video_name, 
                   buffSize = 5, start = 0, stop = 1000, direction = 'forwards', 
-                  iFlag = False, debug = False):
+                  iFlag = False, debug = 0):
     
     from dataset import video_mhf
     from utils import frame_buffer
@@ -99,7 +99,7 @@ def process_video(video_name,
     frame_i = 0
     
     while True:
-        if not debug:
+        if debug == 0:
             sys.stdout.write('\rFrame {}'.format(frame_i))
         else:
             print('Frame {}'.format(frame_i))
@@ -204,7 +204,7 @@ if __name__ == '__main__':
               stop = args.stop,
               direction = 'backwards',
               iFlag = False,
-              debug = True)
+              debug = 0)
     
     
     

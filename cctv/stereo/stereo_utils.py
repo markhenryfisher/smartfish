@@ -13,7 +13,10 @@ def getQmatrix(cam_matrix, dx):
     cy = cam_matrix[1,2] # principal point y-coord
     Tx = dx # stereo baseline length
     
-    Q = np.array([[1, 0, 0, -cx], [0, 1, 0, -cy], [0, 0, 0, fx], [0, 0, 1/Tx, 0]])
+    Q = np.array([[1, 0, 0, -cx], 
+                  [0, 1, 0, -cy], # -1 in this row to turn points 180 deg around x-axis,
+                  [0, 0, 0, fx],  # so that y-axis looks up
+                  [0, 0, 1/Tx, 0]])          
     
     return Q
     
@@ -234,7 +237,7 @@ def compute3d(imgL, imgR, dx, tdx, params, cam_matrix, iFlag=True, debug=False):
     
     return xyz
 
-def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = './'):
+def process_frame_buffer(buff, count, iFlag = True, debug = 0, temp_path = './'):
     """
     find_disparity_from_frame_buffer - compute disparity map for frame pairs
     in frame buffer and fuse into ONE map.
@@ -244,9 +247,11 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
     from utils import image_plotting as ip
     from utils import region_growing as rg
     from utils import myutils as myutils
+    from utils import my3dtransforms
 #    from belt import belt_travel as bt
     import os
     import PIL
+    
     
     
     if buff.belt_name == 'MRV SCOTIA': # belt has no texture
@@ -289,14 +294,15 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
             frameR_n = count+(buff.nItems-1)-i
             frameL_n = count+(buff.nItems-1)-j
             if abs(dx)>threshold and n < max_maps: # todo fix this
-                if debug:
+                if debug > 0:
                     print('imgR= {} : imgL= {} : dx= {:.2f}'.format(frameR_n,frameL_n,dx))                                
              
                 xyz = compute3d(imgL, imgR, dx, tdx, params, camera_matrix, iFlag, debug)
                 watch.append(xyz[140:145,w-485:w-480,2])
                 depthStack.append(xyz[:,:,2])      
                 n += 1
-                
+    
+    # post process depthStack        
     depthArr = np.asarray(depthStack)
     if n>0:
         # average disparity maps ignoring nan entries
@@ -305,13 +311,14 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         avDepth[np.isnan(avDepth)] = camera_matrix[0,0] #-np.inf
     else:
         avDepth = np.zeros((h,w), dtype=np.float64)
-        
+    
+    # flip image (undo earlier flip)    
     if buff.direction == 'backwards':
         avDepth = np.fliplr(avDepth)
         for i in range(depthArr.shape[0]):
             depthArr[i,:,:] = np.fliplr(depthArr[i,:,:])
 
-    #  load (create) roi mask 
+    #  load (or create) roi mask 
     if os.path.isfile(os.path.join(temp_path, "mask"+str(count)+".npy")):
         mask = np.load(os.path.join(temp_path, "mask"+str(count)+".npy"))
     else:
@@ -324,49 +331,59 @@ def process_frame_buffer(buff, count, iFlag = True, debug = False, temp_path = '
         np.save(os.path.join(temp_path, "mask"+str(count)), mask)
            
       
-    #save the 3d point cloud; examine depth samples     
-    if debug:
-        xyz[:,:,2] = avDepth
-        colors = cv2.cvtColor(imgRef, cv2.COLOR_BGR2RGB)
-                
-        # set depth == focal length outside roi (disparity == baseline)
-        xyz[np.logical_not(mask),2] = camera_matrix[0,0]
-        # find ROI
-        im2, ctr, hiers  = cv2.findContours(np.uint8(mask), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        x, y, w, h = cv2.boundingRect(ctr[0])
-        out_points = xyz[y:y+h,x:x+w,:]
-        out_colors = colors[y:y+h,x:x+w,:]
+    # make 3d array of x,y,z coords
+    xyz[:,:,2] = avDepth               
+    # force depth == focal length outside mask (disparity == baseline)
+    xyz[np.logical_not(mask),2] = camera_matrix[0,0]
+    
+    
+    # find ROI
+    im2, ctr, hiers  = cv2.findContours(np.uint8(mask), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    x, y, w, h = cv2.boundingRect(ctr[0])
 
-        
+
+    # correct for camera pose
+    # rotate pi rads around x-axis so z axis points up
+    xyz = my3dtransforms.rotate(xyz, np.pi)
+
+    #save the 3d point cloud; examine depth samples     
+    if debug > 0:
+        colors = cv2.cvtColor(imgRef, cv2.COLOR_BGR2RGB)
+        # rotate pi radians around x axis so z axis points up
+        roi_points = xyz[y:y+h,x:x+w,:]
+        roi_colors = colors[y:y+h,x:x+w,:]
         # examine depth samples
         filename = os.path.join(temp_path, "plot"+str(count)+".png")
         ip.plot_transept((x,y,w,h), depthArr, imgRef, filename)
-#        out_points = xyz[mask]
-#        out_colors = colors[mask]
         
         # write to file
         filename = os.path.join(temp_path, "xyz"+str(count)+".ply")
-        ip.write_ply(filename, out_points, out_colors)
+        ip.write_ply(filename, roi_points, roi_colors)
         
-        visRef = imgRef.copy()
-        cv2.rectangle(visRef, (x,y), (x+w-2,y+h-2), (0,255,0), 2)
+    visRef = imgRef.copy()
+    cv2.rectangle(visRef, (x,y), (x+w-2,y+h-2), (0,255,0), 2)
+    
+
+    # rotate -pi/4 around y-axis so camera is orthogonal to belt (a guess)
+#    xyz = my3dtransforms.rotate(xyz, np.pi/16, axis='y')
+    # force depth == focal length outside mask (disparity == baseline)
+#    xyz[np.logical_not(mask),2] = -camera_matrix[0,0]
+    
+    # set depth == focal length outside roi (disparity == baseline)
+#    avDepth[np.logical_not(mask)] = camera_matrix[0,0]
     
     # render out1, out2
-     # set depth == focal length outside roi (disparity == baseline)
-    avDepth[np.logical_not(mask)] = camera_matrix[0,0]
-    
-    # render
-    visDepth = np.uint8(ip.rescale(avDepth, (0,255)))    
+    visDepth = np.uint8(ip.rescale(xyz[:,:,2], (0,255)))    
     out1 = cv2.applyColorMap(visDepth, cv2.COLORMAP_JET) 
-    filename = os.path.join(temp_path, "map"+str(count)+".png")
-    ip.show_depth_with_scale(avDepth,filename)
     out2 = ip.overlay(imgRef, visDepth)
     
-    if debug:
+    if debug > 0:
         # write results to file
         filename = os.path.join(temp_path, "frame"+str(count)+".jpg") 
         cv2.imwrite(filename, imgRef)
         filename = os.path.join(temp_path, str(n)+"mean"+str(count)+".jpg")
         cv2.imwrite(filename, out1)
+        filename = os.path.join(temp_path, "map"+str(count)+".png")
+        ip.show_depth_with_scale(xyz[:,:,2],filename)
          
     return visRef, out1, out2
