@@ -183,8 +183,8 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--video_name', type=str, default="Belt E base",
                         help='video name.')
-    parser.add_argument('--start', type=int, default=223, help='Start at frame=start_idx')
-    parser.add_argument('--stop', type=int, default=223, help='Stop at frame=stop_idx')
+    parser.add_argument('--start', type=int, default=215, help='Start at frame=start_idx')
+    parser.add_argument('--stop', type=int, default=230, help='Stop at frame=stop_idx')
     args = parser.parse_args()
     
     return args
@@ -204,7 +204,7 @@ if __name__ == '__main__':
               stop = args.stop,
               direction = 'backwards',
               iFlag = False,
-              debug = 0)
+              debug = 1)
     
     
     

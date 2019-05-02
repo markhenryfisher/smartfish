@@ -265,12 +265,11 @@ def process_frame_buffer(buff, count, iFlag = True, debug = 0, temp_path = './')
     h, w = imgRef.shape[:2]
     # save successsive depth maps to depthStack
     depthStack = []
-    # observation window 
-    watch = []
     n = 0
     max_maps = 8
 #    dxMax = buff.getLargestStereoBaseline()
     #print("\nProcessing %s frames; Ref frame %s; Belt transport %s." % (buff.nItems(),count,dxMax))    
+    print('\n')
     for i in range(buff.nItems-1,-1,-1):
         for j in range(i-1,-1,-1):
             imgR = buff.data[i].copy()
@@ -298,7 +297,6 @@ def process_frame_buffer(buff, count, iFlag = True, debug = 0, temp_path = './')
                     print('imgR= {} : imgL= {} : dx= {:.2f}'.format(frameR_n,frameL_n,dx))                                
              
                 xyz = compute3d(imgL, imgR, dx, tdx, params, camera_matrix, iFlag, debug)
-                watch.append(xyz[140:145,w-485:w-480,2])
                 depthStack.append(xyz[:,:,2])      
                 n += 1
     
